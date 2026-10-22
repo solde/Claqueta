@@ -31,6 +31,8 @@ npm run dist:linux         # .AppImage + .deb
 Cada plataforma debe construirse **en su sistema** (`node-pty` lleva un binario nativo por plataforma). `.github/workflows/desktop.yml` lo hace con una matriz
 (macOS Apple Silicon e Intel, Windows, Ubuntu): ejecútalo desde Actions o con una etiqueta `v*`. Resultado en `dist/`.
 
+**Construir desde un Mac sin Rosetta**: macOS arm64/x64 se construyen bien (hay que tener en `node_modules/@lydell/` los binarios de `node-pty` de cada plataforma: `npm pack @lydell/node-pty-<so>-<arch>@1.1.0` y descomprimir), y Windows/Linux salen como **archivos** (`npx electron-builder --win zip --x64 --linux tar.gz --x64`). Los instaladores NSIS, AppImage y deb necesitan binarios x86 (Rosetta) o construirse en su propio sistema.
+
 **Sin firmar.** Los instaladores no están firmados ni notarizados. macOS: clic derecho → Abrir la primera vez (o `xattr -dr com.apple.quarantine /Applications/Claqueta.app`).
 Windows: SmartScreen → «Más información» → «Ejecutar de todos modos». Para firmar, define los secretos de electron-builder (`CSC_LINK`, `CSC_KEY_PASSWORD`,
 `APPLE_ID`…) y quita `CSC_IDENTITY_AUTO_DISCOVERY` del workflow. Linux: si el AppImage falla por el sandbox de Chromium (Ubuntu 24.04+), `./Claqueta.AppImage --no-sandbox` o instala el `.deb`.

@@ -9,7 +9,8 @@ export function compareVersions(a, b) {
 /** The installer for this system among a release's assets (names are fixed by artifactName in package.json). */
 export function pickAsset(assets, { platform, arch }) {
   const a = arch === "arm64" ? "arm64" : arch === "x64" ? "x64" : arch, want = { darwin: new RegExp(`-mac-${a}\\.dmg$`), win32: new RegExp(`-win-${a}-setup\\.exe$`), linux: new RegExp(`-linux-${a}\\.AppImage$`) }[platform];
-  return (want && (assets || []).find((x) => want.test(x.name))) || null;
+  const archive = { win32: new RegExp(`-win-${a}\\.zip$`), linux: new RegExp(`-linux-${a}\\.tar\\.gz$`) }[platform];   // no installer built for this system (yet): the portable archive
+  const list = assets || []; return (want && list.find((x) => want.test(x.name))) || (archive && list.find((x) => archive.test(x.name))) || null;
 }
 export const releasesUrl = ({ host, repo }) => `${host}/${repo}/releases`;
 /** -> { status: "current" | "available" | "unreachable", current, latest?: { version, name, notes, page, asset, size }, error? } */

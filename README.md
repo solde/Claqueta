@@ -8,10 +8,10 @@ contratos y derechos, documentos (HTML/PDF/Word/Excel), archivos de proyecto y u
 
 | Sistema | Archivo | Notas |
 |---|---|---|
-| macOS (Apple Silicon) | `Claqueta-<versión>-mac-arm64.dmg` | Abre el `.dmg` y arrastra Claqueta a Aplicaciones |
-| macOS (Intel) | `Claqueta-<versión>-mac-x64.dmg` | ídem |
-| Windows 10/11 (64 bits) | `Claqueta-<versión>-win-x64-setup.exe` (instalador) o `…-portable.exe` | |
-| Linux (64 bits) | `Claqueta-<versión>-linux-x64.AppImage` o `.deb` | `chmod +x` y ejecutar; si falla por el sandbox: `--no-sandbox` |
+| macOS (Apple Silicon) | `Claqueta-<versión>-mac-arm64.dmg` (o `.zip`) | Abre el `.dmg` y arrastra Claqueta a Aplicaciones |
+| macOS (Intel) | `Claqueta-<versión>-mac-x64.dmg` (o `.zip`) | ídem |
+| Windows 10/11 (64 bits) | `Claqueta-<versión>-win-x64.zip` (portable: descomprime y ejecuta `Claqueta.exe`) · instalador `…-win-x64-setup.exe` cuando esté publicado | |
+| Linux (64 bits) | `Claqueta-<versión>-linux-x64.tar.gz` (descomprime y ejecuta `./claqueta`) · `.AppImage` y `.deb` cuando estén publicados | si falla por el sandbox: `--no-sandbox` |
 
 Las versiones **no están firmadas**: macOS → clic derecho › Abrir la primera vez (o `xattr -dr com.apple.quarantine /Applications/Claqueta.app`); Windows → SmartScreen › Más información › Ejecutar de todos modos.
 `SHA256SUMS.txt` (adjunto a cada versión) permite verificar las descargas. Instrucciones detalladas: [docs/DESCARGAS.md](docs/DESCARGAS.md).

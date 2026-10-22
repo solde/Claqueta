@@ -8,12 +8,12 @@ Todas las versiones están en la sección **Versiones** (*Releases*) de este rep
 3. La primera vez: clic derecho sobre la app › *Abrir* (no está firmada). Si macOS dice que está dañada: `xattr -dr com.apple.quarantine /Applications/Claqueta.app`.
 
 ## Windows
-1. Descarga `Claqueta-<versión>-win-x64-setup.exe` y ejecútalo (o la versión `portable`, que no instala nada).
+1. Descarga `Claqueta-<versión>-win-x64.zip`, descomprímelo donde quieras y ejecuta `Claqueta.exe` (no instala nada). El instalador `…-win-x64-setup.exe` se publica cuando se construye en Windows (`npm run dist:win`).
 2. SmartScreen avisará de que no está firmada: *Más información › Ejecutar de todos modos*.
 
 ## Linux
-1. Descarga `Claqueta-<versión>-linux-x64.AppImage`, `chmod +x` y ejecútalo; o instala el `.deb`.
-2. En Ubuntu 24.04+ el sandbox de Chromium puede impedir arrancar el AppImage: `./Claqueta-….AppImage --no-sandbox`.
+1. Descarga `Claqueta-<versión>-linux-x64.tar.gz`, descomprime (`tar xzf …`) y ejecuta `./claqueta`. Los paquetes `.AppImage` y `.deb` se publican cuando se construyen en Linux (`npm run dist:linux`).
+2. En Ubuntu 24.04+ el sandbox de Chromium puede impedir arrancar: `./claqueta --no-sandbox`.
 
 ## Verificar la descarga
 ```bash
@@ -29,4 +29,4 @@ Si el repositorio es privado, la comprobación desde la app no puede entrar: usa
 - Desinstalar la app no borra los datos; para borrarlos, elimina esa carpeta.
 
 ## Estado
-Probado en macOS (Apple Silicon). Windows, Linux y macOS Intel se construyen con el mismo código, pero **no se han ejecutado todavía**: avisa de cualquier problema.
+Probado en macOS (Apple Silicon). Windows, Linux y macOS Intel se construyen con el mismo código (desde un Mac, sin poder ejecutarlos), pero **no se han ejecutado todavía**: avisa de cualquier problema.

@@ -84,7 +84,8 @@
           ]
         }
       ],
-      "artifactName": "${productName}-${version}-win-${arch}.${ext}"
+      "artifactName": "${productName}-${version}-win-${arch}.${ext}",
+      "signAndEditExecutable": false
     },
     "nsis": {
       "oneClick": false,
@@ -100,7 +101,8 @@
       ],
       "maintainer": "Claqueta <david.soldevila1@gmail.com>",
       "synopsis": "Gestión de producción de TV, radio y podcast",
-      "artifactName": "${productName}-${version}-linux-${arch}.${ext}"
+      "artifactName": "${productName}-${version}-linux-${arch}.${ext}",
+      "executableName": "claqueta"
     },
     "electronLanguages": [
       "es",
@@ -110,6 +112,12 @@
     ],
     "portable": {
       "artifactName": "${productName}-${version}-win-${arch}-portable.${ext}"
+    },
+    "appImage": {
+      "artifactName": "${productName}-${version}-linux-x64.${ext}"
+    },
+    "deb": {
+      "artifactName": "${productName}-${version}-linux-x64.${ext}"
     }
   },
   "repository": {
