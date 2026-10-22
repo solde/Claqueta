@@ -35,4 +35,4 @@ Diseño, sincronización en la nube, carpetas de proyecto, límites y lo no veri
 2. `git tag vX.Y.Z && git push origin vX.Y.Z` → el flujo `.gitea/workflows/release.yml` construye los instaladores en cada sistema (necesita runners de Gitea Actions con esas etiquetas) y los adjunta a la versión.
 3. Sin runners: construye en cada máquina y ejecuta `GITEA_TOKEN=… npm run release -- --tag vX.Y.Z` (crea la versión si no existe y sube todo lo de `dist/` más `SHA256SUMS.txt`).
 
-El token necesita permiso de escritura sobre el repositorio (Gitea › Configuración › Aplicaciones). Como alternativa a la variable, se lee de `~/.config/claqueta/gitea-token`.
+El token necesita permiso de escritura sobre el repositorio (Gitea › Configuración › Aplicaciones). Como alternativa a la variable, se lee de `~/.config/claqueta/gitea-token`. **Sin token**: `npm run release -- --tag vX.Y.Z --ssh-key ~/.ssh/gitea` firma las peticiones de la API con una clave SSH registrada en tu cuenta de Gitea (clave RSA o Ed25519 sin passphrase; se usa una copia temporal para leerla).

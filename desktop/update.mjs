@@ -20,6 +20,8 @@ export async function checkForUpdate({ host, repo, current, platform, arch, fetc
     const list = (await r.json()).filter((x) => !x.draft && !x.prerelease && /^v?\d+\.\d+/.test(x.tag_name)).sort((p, q) => compareVersions(q.tag_name, p.tag_name));
     const top = list[0]; if (!top || compareVersions(top.tag_name, current) <= 0) return { status: "current", current };
     const asset = pickAsset(top.assets, { platform, arch });
-    return { status: "available", current, latest: { version: top.tag_name.replace(/^v/i, ""), name: top.name || top.tag_name, notes: String(top.body || "").slice(0, 1500), page: top.html_url, asset: asset ? { name: asset.name, url: asset.browser_download_url, size: asset.size } : null } };
+    // the URLs are built from the configured host: Gitea reports its internal address (ROOT_URL) in html_url / browser_download_url
+    const page = `${host}/${repo}/releases/tag/${encodeURIComponent(top.tag_name)}`;
+    return { status: "available", current, latest: { version: top.tag_name.replace(/^v/i, ""), name: top.name || top.tag_name, notes: String(top.body || "").slice(0, 1500), page, asset: asset ? { name: asset.name, url: `${host}/${repo}/releases/download/${encodeURIComponent(top.tag_name)}/${encodeURIComponent(asset.name)}`, size: asset.size } : null } };
   } catch (e) { return { status: "unreachable", current, error: "Sin conexión con el servidor de descargas." }; }
 }
