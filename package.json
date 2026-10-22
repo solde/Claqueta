@@ -36,7 +36,7 @@
     "name": "Collado",
     "email": "david.soldevila1@gmail.com"
   },
-  "homepage": "https://gitea.solde.cat/dsoldevila/claqueta",
+  "homepage": "https://gitea.solde.cat/dsoldevila/claqueta-desktop",
   "build": {
     "appId": "cat.solde.claqueta",
     "productName": "Claqueta",
@@ -114,6 +114,6 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://gitea.solde.cat/dsoldevila/claqueta.git"
+    "url": "https://gitea.solde.cat/dsoldevila/claqueta-desktop.git"
   }
 }
