@@ -1,6 +1,6 @@
 {
   "name": "claqueta",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "private": true,
   "type": "module",
   "description": "Claqueta: TV/radio/podcast production suite, offline desktop app for macOS, Windows and Linux",

@@ -2,6 +2,7 @@
 // Document toolbox for agents and people: render Collado Markdown (see the collado-documentos skill) to PDF / Word / HTML with a brand kit, preview pages as PNG to
 // check the layout, lint, create editable documents in the app, export tables to Excel, build slide decks.
 //   collado-doc caps | sources | templates | brands
+//   collado-doc check [--program ID] [--json]                                             -> toolbox check: what is missing to make documents at the best quality, and how to install it (run it when you start a project)
 //   collado-doc render [file.md|-] --format pdf|docx|html|md [-o out] [--doc ID | --template KEY] [--brand NAME] [--program ID] [--episode ID] [--season ID]
 //                      [--lang es|ca|en] [--var key=value ...] [--title T] [--cover | --cover=band|full|minimal|split] [--landscape] [--watermark TEXT] [--pdfa]
 //   collado-doc preview [same options as render] [--pages 1-3] [--dpi 70] [-o prefix]    -> prefix-1.png ... (open them with the Read tool to LOOK at the result)
@@ -14,6 +15,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { app, fail, parseArgs } from "./client.mjs";
+import { runChecks, summarize, formatReport, pythonBin } from "./doccheck.mjs";
 
 const { pos, flags, multi } = parseArgs(process.argv.slice(2), ["format", "doc", "template", "brand", "program", "episode", "season", "lang", "var", "title", "pages", "dpi", "source", "param", "spec", "type", "watermark"]);
 const [cmd, file] = pos;
@@ -43,6 +45,13 @@ async function render(format, extra = {}) {
 const pdfNote = (w) => { if (w.length) console.error("avisos:\n  - " + w.join("\n  - ")); };
 
 switch (cmd) {
+  case "check": {
+    const caps = await app("GET", "/api/docs/capabilities").catch(() => ({ tools: {} })), brands = (await app("GET", "/api/e/brands?limit=100").catch(() => ({ rows: [] }))).rows || [];
+    const program = flags.program ? (await app("GET", `/api/e/programs/${num(flags.program)}`).catch(() => null))?.row || null : null;
+    const results = runChecks({ caps, brands, program }), sum = summarize(results);
+    if (flags.json) console.log(JSON.stringify({ platform: process.platform, ...sum, results }, null, 2)); else console.log(formatReport(results, { app: process.env.APP_DISPLAY_NAME || "" }));
+    process.exit(sum.ok ? 0 : 1);
+  }
   case "caps": console.log(JSON.stringify(await app("GET", "/api/docs/capabilities"), null, 2)); break;
   case "sources": for (const s of (await app("GET", "/api/docs/sources")).sources) console.log(`${s.name.padEnd(18)} ${s.label}\n${" ".repeat(19)}parámetros: ${s.params.join(", ")}`); break;
   case "templates": for (const t of (await app("GET", "/api/e/doc_templates?limit=200&sort=name")).rows) console.log(`${(t.key || String(t.id)).padEnd(18)} ${t.name} [${t.type}/${t.language}]${t.variables?.length ? "  vars: " + t.variables.map((v) => v.key).join(", ") : ""}`); break;
@@ -81,7 +90,7 @@ switch (cmd) {
     let brand = {}; try { const bid = flags.brand ? await resolve("brands", flags.brand, "name") : (await app("GET", "/api/e/brands?limit=100")).rows.find((b) => b.is_default)?.id; if (bid) brand = (await app("GET", `/api/e/brands/${bid}`)).row; } catch { /* default look */ }
     const tmp = path.join(process.env.TMPDIR || "/tmp", `deck-brand-${process.pid}.json`); fs.writeFileSync(tmp, JSON.stringify(brand));
     const py = path.join(path.dirname(new URL(import.meta.url).pathname), "colladodeck.py");
-    const r = spawnSync("python3", ["-I", py, file, out, tmp], { stdio: "inherit" }); fs.rmSync(tmp, { force: true }); process.exit(r.status ?? 1);
+    const r = spawnSync(pythonBin(), ["-I", py, file, out, tmp], { stdio: "inherit" }); fs.rmSync(tmp, { force: true }); process.exit(r.status ?? 1);
   }
   default: fail(fs.readFileSync(new URL(import.meta.url), "utf8").split("\n").slice(2, 17).map((l) => l.replace(/^\/\/ ?/, "")).join("\n"), 2);
 }

@@ -29,6 +29,7 @@ const FM = (() => {
     return d;
   }
   const q = (o) => new URLSearchParams(o).toString();
+  const W = (web, desktop) => (ME.desktop ? desktop : web);   // the desktop build speaks of importing into and exporting from the workspace
 
   function mount(pane) {
     if (pane.dataset.fm) { if (mount.pending !== undefined) { const p = mount.pending; mount.pending = undefined; mount.S.load(p); } else mount.S?.refresh?.(); return; }
@@ -50,8 +51,8 @@ const FM = (() => {
       [["name", "Nombre"], ["mtime", "Fecha"], ["size", "Tamaño"], ["kind", "Tipo"]].map(([v, l]) => el("option", { value: v }, l)));
     const search = el("input", { type: "search", class: "fm-search", placeholder: "Filtrar · Intro busca dentro", "aria-label": "Filtrar o buscar archivos", autocomplete: "off" });
     const bNew = el("button", { class: "btn sm", type: "button", title: "Nueva carpeta (Ctrl+Mayús+N)", onclick: () => newItem("dir") }, "＋ Carpeta");
-    const bUpload = el("button", { class: "btn sm", type: "button", title: "Subir archivos", onclick: () => pick(false) }, "⇧ Subir");
-    const bDown = el("button", { class: "btn sm primary", type: "button", title: "Descargar la selección (carpetas en .zip)", onclick: () => download([...S.sel].map((n) => full(n))) }, "⇩ Descargar");
+    const bUpload = el("button", { class: "btn sm", type: "button", title: W("Subir archivos", "Importar archivos"), onclick: () => pick(false) }, W("⇧ Subir", "⇧ Importar"));
+    const bDown = el("button", { class: "btn sm primary", type: "button", title: W("Descargar la selección (carpetas en .zip)", "Exportar la selección (carpetas en .zip)"), onclick: () => download([...S.sel].map((n) => full(n))) }, W("⇩ Descargar", "⇩ Exportar"));
     const bTrash = el("button", { class: "btn sm", type: "button", title: "Mover a la papelera (Supr)", onclick: () => remove() }, "🗑 Papelera");
     const bHidden = el("button", { class: "btn sm", type: "button", "aria-pressed": "false", title: "Mostrar archivos ocultos (Ctrl+Mayús+.)", onclick: () => { S.hidden = !S.hidden; persist(); render(); } }, ".·");
     const tool = el("div", { class: "fm-tool", role: "toolbar", "aria-label": "Herramientas" }, el("div", { class: "fm-nav" }, bBack, bFwd, bUp), crumbs,
@@ -60,7 +61,7 @@ const FM = (() => {
     const content = el("div", { class: "fm-content", tabindex: "0", role: "listbox", "aria-multiselectable": "true", "aria-label": "Archivos" });
     const status = el("div", { class: "fm-status", "aria-live": "polite" });
     const xfers = el("div", { class: "fm-xfers" });
-    const drop = el("div", { class: "fm-drop", hidden: true }, "Suelta aquí para subir");
+    const drop = el("div", { class: "fm-drop", hidden: true }, W("Suelta aquí para subir", "Suelta aquí para importar"));
     const fileInput = el("input", { type: "file", multiple: true, hidden: true }), dirInput = el("input", { type: "file", multiple: true, webkitdirectory: true, hidden: true });
     const menu = el("div", { class: "fm-menu pop", role: "menu", hidden: true });
     const main = el("div", { class: "fm-main" }, tool, actions, el("div", { class: "fm-body" }, content, drop), xfers, status);
@@ -129,7 +130,7 @@ const FM = (() => {
       const l = visible();
       content.className = `fm-content ${S.view}`;
       if (!l.length) content.replaceChildren(el("div", { class: "fm-empty" }, el("div", { class: "big", "aria-hidden": "true" }, S.found ? "🔍" : inTrash() ? ICONS.trash : "📂"),
-        el("p", {}, S.found ? "Sin resultados" : S.filter ? "Nada coincide con el filtro" : inTrash() ? "La papelera está vacía" : "Carpeta vacía"), S.found || S.filter || inTrash() ? false : el("p", { class: "hint" }, "Arrastra archivos aquí o usa «Subir».")));
+        el("p", {}, S.found ? "Sin resultados" : S.filter ? "Nada coincide con el filtro" : inTrash() ? "La papelera está vacía" : "Carpeta vacía"), S.found || S.filter || inTrash() ? false : el("p", { class: "hint" }, W("Arrastra archivos aquí o usa «Subir».", "Arrastra archivos aquí o usa «Importar»."))));
       else {
         const rows = l.map((e) => {
           const r = el("div", { class: "fm-item" + (S.sel.has(e.name) ? " sel" : "") + (S.clip?.cut && S.clip.paths.includes(full(e.name)) ? " cut" : ""), role: "option", "aria-selected": String(S.sel.has(e.name)), "data-name": e.name, "data-type": e.type,
@@ -279,7 +280,7 @@ const FM = (() => {
       else if (["mp4", "webm", "mov"].includes(ext)) body = el("video", { src: url, controls: true, class: "ql-vid" });
       else if (PREVIEW_TEXT.has(ext) && e.size <= 1048576) { body = el("pre", { class: "ql-text" }, "Cargando…"); fetch(url).then((r) => r.text()).then((t) => { body.textContent = t.slice(0, 300000); }).catch(() => { body.textContent = "No se pudo leer el archivo."; }); }
       else body = el("div", { class: "fm-empty" }, el("div", { class: "big", "aria-hidden": "true" }, iconOf(e)), el("p", {}, PREVIEW_TEXT.has(ext) ? "Archivo demasiado grande para la vista previa." : "No hay vista previa para este tipo de archivo."));
-      const dl = el("button", { class: "btn primary", type: "button", onclick: () => download([full(e.name)]) }, "⇩ Descargar");
+      const dl = el("button", { class: "btn primary", type: "button", onclick: () => download([full(e.name)]) }, W("⇩ Descargar", "⇩ Exportar"));
       const done = modal(nm, el("div", { class: "ql" }, el("div", { class: "ql-body" }, body), buttons(el("span", { class: "grow ql-meta" }, `${fmtSize(e.size)} · ${dt(e.mtime)}`), dl, el("button", { class: "btn", type: "button", onclick: () => modal.close(null) }, "Cerrar"))));
       $("#modal .dialog")?.classList.add("wide");
       done.then(() => { $("#modal .dialog")?.classList.remove("wide"); body.pause?.(); if (body.tagName === "IFRAME") body.src = "about:blank"; });
@@ -293,12 +294,12 @@ const FM = (() => {
       const sep = () => items.push(el("div", { class: "sep" }));
       if (onItem && inTrash()) { add("Restaurar", restore); add("Eliminar definitivamente…", remove); sep(); add("Información", info); }
       else if (onItem) {
-        add(one && (s[0].type === "dir" || ME.desktop) ? "Abrir" : "Vista previa", () => (one ? open(s[0]) : 0), { disabled: !one, key: "Intro" }); if (ME.desktop && one && s[0].type === "file") add("Vista previa", () => preview(s[0]), { key: "Espacio" }); add("Descargar" + (s.some((e) => e.type === "dir") || s.length > 1 ? " (.zip)" : ""), () => download(s.map((e) => full(e.name))));
+        add(one && (s[0].type === "dir" || ME.desktop) ? "Abrir" : "Vista previa", () => (one ? open(s[0]) : 0), { disabled: !one, key: "Intro" }); if (ME.desktop && one && s[0].type === "file") add("Vista previa", () => preview(s[0]), { key: "Espacio" }); add(W("Descargar", "Exportar") + (s.some((e) => e.type === "dir") || s.length > 1 ? " (.zip)" : ""), () => download(s.map((e) => full(e.name))));
         sep(); add("Renombrar", startRename, { disabled: !one || !!S.found, key: "F2" }); add("Duplicar", duplicate, { disabled: !!S.found }); add("Copiar", () => copyOrCut(false), { key: "Ctrl+C" }); add("Cortar", () => copyOrCut(true), { key: "Ctrl+X" });
         if (S.clip && one && s[0].type === "dir") add("Pegar dentro", () => paste(full(s[0].name)));
         sep(); add("Información", info, { key: "Ctrl+I" }); add("Mover a la papelera", remove, { key: "Supr" });
       } else if (inTrash()) { add("Vaciar la papelera…", remove, { disabled: !S.entries.some((e) => !e.name.startsWith(".")) }); }
-      else { add("Nueva carpeta", () => newItem("dir"), { key: "Ctrl+⇧+N" }); add("Nuevo archivo de texto", () => newItem("file")); sep(); add("Pegar", () => paste(), { disabled: !S.clip, key: "Ctrl+V" }); add("Subir archivos…", () => pick(false)); add("Subir carpeta…", () => pick(true));
+      else { add("Nueva carpeta", () => newItem("dir"), { key: "Ctrl+⇧+N" }); add("Nuevo archivo de texto", () => newItem("file")); sep(); add("Pegar", () => paste(), { disabled: !S.clip, key: "Ctrl+V" }); add(W("Subir archivos…", "Importar archivos…"), () => pick(false)); add(W("Subir carpeta…", "Importar carpeta…"), () => pick(true));
         sep(); add(S.hidden ? "Ocultar archivos ocultos" : "Mostrar archivos ocultos", () => { S.hidden = !S.hidden; persist(); render(); }); add("Información de esta carpeta", info); }
       menu.replaceChildren(...items); menu.hidden = false;
       const r = pane.getBoundingClientRect(), w = menu.offsetWidth, h = menu.offsetHeight;
@@ -365,7 +366,7 @@ const FM = (() => {
         bar.remove();
         if (r.status === 200) okN++; else toast(`${rel}: ${r.status === 413 ? "demasiado grande (máx. 200 MB)" : errText(r.error)}`);
       }
-      if (okN) toast(`${okN} archivo${okN > 1 ? "s" : ""} subido${okN > 1 ? "s" : ""}`); await S.refresh(); loadSide();
+      if (okN) toast(`${okN} archivo${okN > 1 ? "s" : ""} ${W("subido", "importado")}${okN > 1 ? "s" : ""}`); await S.refresh(); loadSide();
     }
     async function readEntries(entry, prefix = "") {   // webkit directory traversal for dropped folders
       if (entry.isFile) return new Promise((res) => entry.file((f) => res([{ file: f, rel: prefix + f.name }]), () => res([])));

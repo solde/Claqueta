@@ -36,7 +36,7 @@ if (!keys) { if (ROOT || env.AGENTD_REQUIRE_KEY === "1") { console.error("INTERN
 
 const apiUrl = `http://127.0.0.1:${APP_PORT}`, ctlUrl = `http://127.0.0.1:${PORT}`;
 const sharedClaude = Object.fromEntries(["CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY"].filter((k) => env[k]).map((k) => [k, env[k]]));
-const users = new Users({ root: ROOT, homes: HOMES, shared: D.shared, state: STATE, apiUrl, ctlUrl, tokenKey: keys?.token || "dev-token-key", log, sharedClaude, portable: DESKTOP });
+const users = new Users({ root: ROOT, homes: HOMES, shared: D.shared, state: STATE, apiUrl, ctlUrl, tokenKey: keys?.token || "dev-token-key", log, sharedClaude, portable: DESKTOP, toolsDir: DESKTOP ? (env.TOOLS_DIR || path.join(HERE, "..", "tools")) : "", appName: env.APP_DISPLAY_NAME || "Collado" });
 const APP_PASSTHROUGH = ["APP_FLAGS", "MAX_JOBS", "AGENT_JOB_CMD", "RENDER_URL", "RENDER_KEY", "COLLADO_DESKTOP", "APP_DISPLAY_NAME"];   // the only variables the app inherits from agentd
 const sup = new Supervisor({ root: ROOT, dirs: D, appPort: APP_PORT, env: Object.fromEntries(APP_PASSTHROUGH.filter((k) => env[k]).map((k) => [k, env[k]])), log, keys, ctlUrl, managed: !DESKTOP });
 const consoles = DESKTOP ? new PtyConsoles({ users, agentCmd: env.AGENT_BIN || "claude", shellCmd: env.SHELL_BIN || "", maxUsers: Number(env.MAX_CONSOLE_USERS || 6), idleHours: Number(env.CONSOLE_IDLE_HOURS || 12), log }) : new Consoles({ users, tmuxBin: env.TMUX_BIN || "tmux", tmuxConf: env.TMUX_CONF || path.join(HERE, "tmux.conf"), agentCmd: env.AGENT_CMD || "claude --continue || exec claude", shellCmd: env.SHELL_CMD || "bash -l",

@@ -4,7 +4,7 @@ description: Cómo leer y escribir datos de Collado (programas, temporadas, epis
 ---
 # Trabajar con los datos de Collado (`collado-api`)
 
-Actúas con **los permisos de tu persona** (token en `~/.collado/token`, caduca a las 24 h: si da 401, hay que reabrir la consola). Ejecuta `collado-api` sin argumentos para ver la ayuda.
+Actúas con **los permisos de tu persona** (token en el fichero que indica `COLLADO_TOKEN_FILE`, normalmente `~/.collado/token` de tu espacio de trabajo; caduca a las 24 h: si da 401, hay que reabrir la consola). Ejecuta `collado-api` sin argumentos para ver la ayuda.
 
 ## Descubrir
 - `collado-api schema` → entidades; `collado-api schema episodes` → campos, tipos (`text, long, int, num, pct, money, bool, date, datetime, time, enum, ref, json, tags, secret`), opciones de enums, referencias (`-> programs`), solo lectura.

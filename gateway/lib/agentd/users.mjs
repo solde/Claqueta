@@ -15,8 +15,8 @@ const REQUIRED_ALLOW = ["Bash(collado-app:*)", "Bash(collado-api:*)", "Bash(coll
 
 export class Users {
   /** `portable` = desktop build: one local person, no setpriv / `env -i` (they do not exist on Windows); processes get their clean environment through spawn's `env` option instead. */
-  constructor({ root, homes, shared, state, apiUrl, ctlUrl, tokenKey, log = () => {}, sharedClaude = {}, portable = false, extraPath = [] }) {
-    Object.assign(this, { root, homes, shared, state, apiUrl, ctlUrl, tokenKey, log, sharedClaude, portable, extraPath });
+  constructor({ root, homes, shared, state, apiUrl, ctlUrl, tokenKey, log = () => {}, sharedClaude = {}, portable = false, extraPath = [], toolsDir = "", appName = "Collado" }) {
+    Object.assign(this, { root, homes, shared, state, apiUrl, ctlUrl, tokenKey, log, sharedClaude, portable, extraPath, toolsDir, appName });
     fs.mkdirSync(state, { recursive: true }); fs.mkdirSync(homes, { recursive: true });
     this.file = path.join(state, "users.json"); this.db = this.#load();
   }
@@ -60,12 +60,12 @@ export class Users {
   #seedHome(u) {
     const home = this.homeOf(u.name), w = (p, data, mode = 0o600) => { fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, data, { mode }); };
     for (const d of [home, path.join(home, "work"), path.join(home, ".claude"), path.join(home, ".collado")]) fs.mkdirSync(d, { recursive: true, mode: 0o700 });
-    const claudeMd = path.join(home, "CLAUDE.md");
+    const claudeMd = path.join(home, "CLAUDE.md"), ref = this.#sharedRef(home);
     if (!fs.existsSync(claudeMd)) {
-      const tpl = path.join(this.shared, "agent", "CLAUDE.template.md");
-      const body = fs.existsSync(tpl) ? fs.readFileSync(tpl, "utf8").replaceAll("{{SHARED}}", this.shared).replaceAll("{{USER}}", u.name) : `@${this.shared}/agent/AGENT.md\n@${this.shared}/TEAM.md\n`;
+      const dir = path.join(this.shared, "agent"), desktopTpl = path.join(dir, "CLAUDE.template.desktop.md"), tpl = this.portable && fs.existsSync(desktopTpl) ? desktopTpl : path.join(dir, "CLAUDE.template.md");
+      const body = fs.existsSync(tpl) ? fs.readFileSync(tpl, "utf8").replaceAll("{{SHARED}}", ref).replaceAll("{{USER}}", u.name).replaceAll("{{APP_NAME}}", this.appName) : `@${ref}/agent/AGENT.md\n@${ref}/TEAM.md\n`;
       w(claudeMd, body, 0o644);
-    }
+    } else if (this.portable) this.#syncImports(claudeMd, ref);
     // settings: created once, then only the required permissions are added (never removed or reordered): the person owns the rest
     const sf = path.join(home, ".claude", "settings.json"); let s = {}; try { s = JSON.parse(fs.readFileSync(sf, "utf8")); } catch { /* new */ }
     s.permissions ||= { defaultMode: "acceptEdits", allow: [] }; s.permissions.allow ||= []; for (const a of REQUIRED_ALLOW) if (!s.permissions.allow.includes(a)) s.permissions.allow.push(a);
@@ -78,12 +78,28 @@ export class Users {
     this.chown(home, u, true);
     fs.chmodSync(home, 0o700);
   }
+  /** How the person's CLAUDE.md points at the shared guidelines. A path with spaces (macOS "Application Support") breaks an @import, so then the import is RELATIVE to the file. */
+  #sharedRef(home) { return /\s/.test(this.shared) ? (path.relative(home, this.shared).split(path.sep).join("/") || ".") : this.shared; }
+  /** Existing CLAUDE.md (desktop): keep the person's own text, but make sure the imports are valid and include the desktop notes. Only the import lines are touched. */
+  #syncImports(file, ref) {
+    let cur; try { cur = fs.readFileSync(file, "utf8"); } catch { return; }
+    const lines = cur.split("\n"), out = []; let hasDesktop = lines.some((l) => /^@.*\/agent\/AGENT\.desktop\.md\s*$/.test(l));
+    for (const l of lines) {
+      if (/^@.*\/agent\/AGENT\.md\s*$/.test(l)) { out.push(`@${ref}/agent/AGENT.md`); if (!hasDesktop && fs.existsSync(path.join(this.shared, "agent", "AGENT.desktop.md"))) { out.push(`@${ref}/agent/AGENT.desktop.md`); hasDesktop = true; } }
+      else if (/^@.*\/agent\/AGENT\.desktop\.md\s*$/.test(l)) out.push(`@${ref}/agent/AGENT.desktop.md`);
+      else if (/^@.*\/TEAM\.md\s*$/.test(l)) out.push(`@${ref}/TEAM.md`);
+      else out.push(l);
+    }
+    const next = out.join("\n"); if (next !== cur) fs.writeFileSync(file, next, { mode: 0o644 });
+  }
   /** (Re)writes the person's API token: the app trusts it with exactly the permissions they had when it was issued. */
   refreshToken(u) {
     const f = path.join(this.homeOf(u.name), ".collado", "token"); fs.writeFileSync(f, signToken(this.tokenKey, { user: u.name, perms: u.perms, org: u.org || "principal" }) + "\n", { mode: 0o600 }); this.chown(f, u);
     return f;
   }
 
+  /** Where the person's workspace, working folder and the team tools are (the agent guidelines refer to these variables instead of hard-coded paths). */
+  #where(home) { return { COLLADO_WORKSPACE: home, COLLADO_WORK: path.join(home, "work"), COLLADO_TOOLS: this.toolsDir || "/opt/collado-tools" }; }
   /** Clean environment of a user process. */
   env(u, extra = {}) {
     const home = this.homeOf(u.name);
@@ -94,11 +110,11 @@ export class Users {
       const real = os.homedir();
       return { ...baseEnv(), HOME: real, USERPROFILE: real, CLAUDE_CONFIG_DIR: path.join(home, ".claude"), USER: u.name, LOGNAME: u.name, TERM: "xterm-256color", COLORTERM: "truecolor", LANG: process.env.LANG || "en_US.UTF-8", TZ: process.env.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone,
         PATH: searchPath(dirs).join(path.delimiter), NPM_CONFIG_PREFIX: path.join(home, ".npm-global"), NPM_CONFIG_CACHE: path.join(home, ".npm-cache"),
-        COLLADO_API: this.apiUrl, COLLADO_CTL: this.ctlUrl, COLLADO_USER: u.name, COLLADO_TOKEN_FILE: path.join(home, ".collado", "token"), COLLADO_SHARED: this.shared, DISABLE_AUTOUPDATER: "1", ...this.sharedClaude, ...extra };
+        COLLADO_API: this.apiUrl, COLLADO_CTL: this.ctlUrl, COLLADO_USER: u.name, COLLADO_TOKEN_FILE: path.join(home, ".collado", "token"), COLLADO_SHARED: this.shared, ...this.#where(home), DISABLE_AUTOUPDATER: "1", ...this.sharedClaude, ...extra };
     }
     return { HOME: home, USER: u.name, LOGNAME: u.name, SHELL: "/bin/bash", TERM: "xterm-256color", COLORTERM: "truecolor", LANG: "C.UTF-8", TZ: process.env.TZ || "Europe/Madrid",
       PATH: [path.join(home, ".local/bin"), path.join(home, ".npm-global/bin"), "/opt/claude/bin", "/usr/local/bin", "/usr/bin", "/bin"].join(":"), NPM_CONFIG_PREFIX: path.join(home, ".npm-global"), NPM_CONFIG_CACHE: path.join(home, ".npm-cache"),
-      COLLADO_API: this.apiUrl, COLLADO_CTL: this.ctlUrl, COLLADO_USER: u.name, COLLADO_TOKEN_FILE: path.join(home, ".collado", "token"), COLLADO_SHARED: this.shared,
+      COLLADO_API: this.apiUrl, COLLADO_CTL: this.ctlUrl, COLLADO_USER: u.name, COLLADO_TOKEN_FILE: path.join(home, ".collado", "token"), COLLADO_SHARED: this.shared, ...this.#where(home),
       GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "safe.directory", GIT_CONFIG_VALUE_0: "*", DISABLE_AUTOUPDATER: "1", ...(process.env.LD_LIBRARY_PATH ? { LD_LIBRARY_PATH: process.env.LD_LIBRARY_PATH } : {}), ...this.sharedClaude, ...extra };
   }
   /** The `env` option to pass to spawn(): the portable build has no `env -i` wrapper, so it must be given explicitly (undefined = what wrap() already encodes). */

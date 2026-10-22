@@ -201,7 +201,7 @@ async function boot() {
   await win.loadURL(state.urls.login);
   if (smoke) {
     await sleep(3500); const here = new URL(win.webContents.getURL());
-    const checks = await runChecks(win, { renderUrl: state.render.url, renderKey, outDir: path.dirname(smoke), lastOpened: () => state.lastOpened });
+    const checks = await runChecks(win, { renderUrl: state.render.url, renderKey, outDir: path.dirname(smoke), lastOpened: () => state.lastOpened, appUrl: `http://127.0.0.1:${appPort}`, dataDir, user: localUser(), tools: path.join(ROOT, "tools") });
     await win.webContents.executeJavaScript(`location.hash = "#/app"; document.getElementById("appframe").contentWindow.location.hash = "#/"; 0`); await sleep(2000);
     fs.writeFileSync(smoke, (await win.webContents.capturePage()).toPNG());   // the dashboard
     const good = here.origin === origin && here.pathname === "/" && checks.every((c) => c.ok);

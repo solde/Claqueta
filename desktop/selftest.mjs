@@ -1,8 +1,10 @@
 // End-to-end checks that run inside the real window (`electron . --smoke-test=out.png`): the same requests the UI makes, against the real servers.
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 
-export async function runChecks(win, { renderUrl, renderKey, outDir, lastOpened }) {
+export async function runChecks(win, { renderUrl, renderKey, outDir, lastOpened, appUrl, dataDir, user, tools }) {
   const page = (code) => win.webContents.executeJavaScript(`(async () => { ${code} })()`);
   const results = [];
   const check = async (name, fn) => { try { const r = await fn(); results.push({ name, ok: r === true || (r && r.ok !== false), ...(typeof r === "object" ? r : {}) }); } catch (e) { results.push({ name, ok: false, error: String(e?.message || e) }); } };
@@ -39,6 +41,22 @@ export async function runChecks(win, { renderUrl, renderKey, outDir, lastOpened 
     const txt = await (await fetch("/_gw/api/files/download?path=" + encodeURIComponent(lk.path + "/informe.txt"))).text(); if (txt !== "contenido del proyecto") return { ok: false, step: "read", txt };
     const bad = await fetch("/_gw/api/files/link", { method: "POST", headers: H, body: JSON.stringify({ name: "../x", target: ${JSON.stringify(projectDir)} }) }); const bad2 = await fetch("/_gw/api/files/link", { method: "POST", headers: H, body: JSON.stringify({ name: "ok", target: "relativa/ruta" }) });
     return { ok: bad.status === 400 && bad2.status === 400, linkPath: lk.path, id };`).then((r) => { linkPath = r.linkPath || ""; return r; }));
+  await check("project CLAUDE.md: the programme's own folder got the project rules, with the toolbox check for THIS programme", async () => {
+    const f = path.join(projectDir, "CLAUDE.md"); if (!fs.existsSync(f)) return { ok: false, step: "not written" }; const body = fs.readFileSync(f, "utf8");
+    const id = /#\/p\/(\d+)/.exec(body)?.[1];
+    return { ok: /# Proyecto: Proyecto con carpeta/.test(body) && /collado-doc check --program \d+/.test(body) && body.includes(projectDir) && body.includes("Claqueta") && !body.includes("{{") && !!id, id, size: body.length };
+  });
+  await check("collado-doc check: runs against the live app (as the agent would) and reports this machine's toolbox", async () => {
+    const id = /#\/p\/(\d+)/.exec(fs.readFileSync(path.join(projectDir, "CLAUDE.md"), "utf8"))?.[1], token = path.join(dataDir, "homes", user, ".collado", "token");
+    const r = spawnSync(process.execPath, [path.join(tools, "collado-doc.mjs"), "check", "--json", "--program", id], { encoding: "utf8", env: { ...process.env, ELECTRON_RUN_AS_NODE: "1", COLLADO_API: appUrl, COLLADO_TOKEN_FILE: token }, timeout: 60000 });
+    let j; try { j = JSON.parse(r.stdout); } catch { return { ok: false, status: r.status, out: (r.stdout + r.stderr).slice(0, 300) }; }
+    const by = Object.fromEntries(j.results.map((x) => [x.id, x]));
+    return { ok: j.platform === process.platform && by.pdf?.ok && /Chromium/.test(by.pdf.detail) && by.folder?.ok && by.folder.detail === projectDir && ["preview", "office", "python", "pymods"].every((k) => by[k] && typeof by[k].ok === "boolean" && (by[k].ok || /\S/.test(by[k].install))) && typeof j.max_quality === "boolean", exit: r.status, missing: j.missing_recommended };
+  });
+  await check("agent environment: the shell session has the workspace variables and its own Claude config dir, with the real HOME", () => page(String.raw`return await new Promise((res) => { const ws = new WebSocket("ws://" + location.host + "/_gw/ws/term?session=shell&cols=200&rows=30"); ws.binaryType = "arraybuffer"; let out = ""; const dec = new TextDecoder(), ESC = String.fromCharCode(27), BEL = String.fromCharCode(7);
+    const clean = (x) => x.split(ESC + "]").map((part, i) => (i ? part.slice(part.indexOf(BEL) + 1) : part)).join("").replace(new RegExp(ESC + "\\[[0-9;?]*[ -/]*[@-~]", "g"), "").replace(/\r/g, "");
+    const t = setTimeout(() => res({ ok: false, out: clean(out).slice(-300) }), 15000); ws.onopen = () => setTimeout(() => ws.send(new TextEncoder().encode('echo "@@W=$COLLADO_WORK|C=$CLAUDE_CONFIG_DIR|H=$HOME@@"' + String.fromCharCode(10))), 2500);
+    ws.onmessage = (e) => { if (typeof e.data !== "string") { out += dec.decode(e.data); const all = [...clean(out).matchAll(/@@W=([^|]*)\|C=([^|]*)\|H=(.*?)@@/g)].filter((m) => !m[0].includes("$")); if (all.length) { clearTimeout(t); ws.close(); const m = all[all.length - 1]; res({ ok: true, w: m[1], c: m[2], h: m[3] }); } } }; })`).then((r) => ({ ...r, ok: r.ok && r.w === path.join(dataDir, "homes", user, "work") && r.c === path.join(dataDir, "homes", user, ".claude") && r.h === os.homedir() })));
   await check("file manager: double click opens the file with the system (path reaches the main process); Space still previews; the page cannot open files outside its workspace", async () => {
     const r = await page(`
       const bridge = window.colladoDesktop; if (!bridge) return { ok: false, step: "no bridge" };
@@ -90,6 +108,11 @@ export async function runChecks(win, { renderUrl, renderKey, outDir, lastOpened 
     const { BrowserWindow } = await import("electron"); const winTitle = BrowserWindow.getAllWindows().map((w) => w.getTitle());
     return { ok: r.title === "Claqueta" && r.brand === "Claqueta" && r.aria === "Claqueta" && r.appTitle === "Claqueta" && r.appName === "Claqueta" && /Recorrido por Claqueta/.test(r.tour), ...r, winTitle };
   });
+  await check("file manager wording: Importar / Exportar (not Subir / Descargar) in the toolbar and the context menu", () => page(`
+    location.hash = "#/files"; await new Promise((r) => setTimeout(r, 1200)); const bar = document.querySelector("#pane-files .fm-actions").innerText;
+    const empty = document.querySelector("#pane-files .fm-content"); empty.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: 200, clientY: 300 })); await new Promise((r) => setTimeout(r, 300));
+    const menu = document.querySelector("#pane-files .fm-menu")?.innerText || ""; document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); document.querySelector("#pane-files").dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    return { ok: /Importar/.test(bar) && /Exportar/.test(bar) && !/Subir|Descargar/.test(bar) && /Importar archivos/.test(menu) && !/Subir/.test(menu), bar: bar.replace(/\s+/g, " "), menu: menu.replace(/\s+/g, " ").slice(0, 120) };`));
   await check("claude login status: a fresh workspace is NOT logged in, even when the user is logged in elsewhere on this Mac (own config dir, real HOME)", () => page(`const r = await (await fetch("/_gw/api/agent/login-status")).json(); return { ok: r.logged_in === false, r };`));
   await check("claude login helper: a link that Claude Code hard-wraps over several rows is read back whole", () => page(String.raw`
     const U = "https://claude.com/cai/oauth/authorize?code=true&client_id=9d1c250a-e61b-44d9-88ed-5944d1962f5e&response_type=code&redirect_uri=https%3A%2F%2Fplatform.claude.com%2Foauth%2Fcode%2Fcallback&scope=org%3Acreate_api_key+user%3Aprofile+user%3Ainference&code_challenge=u6bEdLRQic--1rC&code_challenge_method=S256&state=boBAe37wXB0lZkrVeKuir0yahCEgTgRwi0gUlPCQnoQ";

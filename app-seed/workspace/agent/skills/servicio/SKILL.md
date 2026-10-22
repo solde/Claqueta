@@ -4,6 +4,8 @@ description: Modificar el propio servicio Collado (código de la app en /data/ap
 ---
 # Cambiar Collado (solo con permiso `service.manage`)
 
+> **En la app de escritorio (Claqueta) esta habilidad NO se aplica:** el código de la app viene dentro del programa y es de solo lectura (no hay `/data/app`, ni `git`, ni `rollback`). Si te piden cambiar cómo funciona la app, explica que se hace en el repositorio de la aplicación y se publica como versión nueva; ofrécete a redactar la petición con todo el detalle.
+
 Si tu persona no tiene el permiso, el código es de solo lectura para ti: explica que lo gestiona una persona administradora. Si lo tiene, puedes cambiar el servicio **dentro de este pod**; el supervisor reinicia la app ~1 s después de guardar y, si no arranca, la pantalla de servicio muestra el error y puedes volver atrás.
 
 ## Dónde está cada cosa (`/data/app`, repo git local)
