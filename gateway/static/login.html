@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Collado · Acceso</title>
+<link rel="icon" href="/_gw/static/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/_gw/static/nb.css">
+<link rel="stylesheet" href="/_gw/static/theme.css">
+<style>
+  body { display: grid; place-items: center; min-height: 100%; padding: 16px; }
+  .card { width: min(400px, 100%); background: var(--nb-surface); border: var(--nb-border-w-thick) solid var(--nb-ink); box-shadow: var(--nb-shadow-lg); padding: 28px 24px; }
+  .brand { display: flex; align-items: center; gap: 10px; font: 700 2rem var(--nb-font-display); text-transform: uppercase; letter-spacing: -.02em; }
+  .rec { width: 22px; height: 22px; border-radius: 50%; background: var(--nb-accent); border: var(--nb-border); box-shadow: 0 0 0 3px var(--nb-surface), 0 0 0 6px var(--nb-ink); }
+  .sub { color: var(--nb-ink-soft); margin: 4px 0 8px; }
+  .btn.primary { width: 100%; justify-content: center; margin-top: 18px; }
+</style>
+</head>
+<body>
+<main class="card">
+  <div class="brand"><span class="rec" aria-hidden="true"></span>Collado</div>
+  <p class="sub">Estudio de proyectos de televisión</p>
+  <form id="f" autocomplete="on">
+    <label for="u">Usuario</label>
+    <input id="u" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required autofocus>
+    <label for="p">Contraseña</label>
+    <input id="p" name="password" type="password" autocomplete="current-password" required>
+    <p class="err" id="e" role="alert" aria-live="polite"></p>
+    <button class="btn primary" type="submit">Entrar</button>
+  </form>
+  <form id="f2" hidden autocomplete="off">
+    <p class="sub">Introduce el código de 6 cifras de tu aplicación de autenticación (o un código de recuperación).</p>
+    <label for="c">Código</label>
+    <input id="c" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" autocapitalize="none" spellcheck="false" required>
+    <p class="err" id="e2" role="alert" aria-live="polite"></p>
+    <button class="btn primary" type="submit">Verificar</button>
+    <button class="btn" type="button" id="back" style="width:100%;justify-content:center;margin-top:8px">Volver</button>
+  </form>
+</main>
+<script src="/_gw/static/login.js"></script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+node_modules/
+gateway/static/vendor/
+.scratch/
+dist/
+.DS_Store
+.DS_Store
+dist/
+.scratch/
