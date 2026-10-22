@@ -34,9 +34,12 @@ export function widget(entity, fd, value, o = {}) {
       if (fd.format === "color") { const c = h("input.nb-input.nb-input--color", { id, type: "color", value: /^#[0-9a-f]{6}$/i.test(value || "") ? value : "#000000", disabled }); const tx = h("input.nb-input", { value: value ?? "", disabled, placeholder: "#RRGGBB", "aria-label": fieldLabel(entity, fd.name) }); c.addEventListener("input", () => { tx.value = c.value; }); tx.addEventListener("input", () => { if (/^#[0-9a-f]{6}$/i.test(tx.value)) c.value = tx.value; }); el = h("div.nb-row", { style: { flexWrap: "nowrap" } }, c, h("div.nb-grow", tx)); el.focusEl = tx; get = () => tx.value || null; set = (v) => { tx.value = v ?? ""; if (/^#[0-9a-f]{6}$/i.test(v || "")) c.value = v; }; break; }
       if (fd.format === "folder") {   // a folder on this computer: typed, or chosen with the system dialog when the desktop shell offers one (the shell is a same-origin parent frame)
         const inp = h("input.nb-input", { ...base, type: "text", value: value ?? "", maxlength: fd.max, placeholder: t("folder_hint"), spellcheck: "false", autocomplete: "off" });
-        const bridge = window.parent !== window ? window.parent.colladoDesktop : null;
+        const bridge = window.parent !== window ? window.parent.colladoDesktop : null, LP = "collado.lastProjectParent", store = { get: () => { try { return localStorage.getItem(LP) || ""; } catch { return ""; } }, set: (v) => { try { localStorage.setItem(LP, v); } catch { /* private mode */ } } };
+        const parentOf = (p) => p.replace(/[\\/][^\\/]*[\\/]?$/, ""), sep = (b) => (b.includes("\\") && !b.includes("/") ? "\\" : "/");
+        // a new project: suggest <the parent folder you used last time>/<project name> the first time the field gets the focus
+        inp.addEventListener("focus", () => { if (inp.value.trim()) return; const nm = inp.closest("form")?.querySelector('[data-field="name"] input')?.value.trim(), lp = store.get(); if (nm && lp) inp.value = lp + sep(lp) + nm.replace(/[\\/:*?"<>|]/g, " ").replace(/\s+/g, " "); });
         if (bridge?.pickFolder && !disabled) {
-          const pick = btn(t("choose_folder"), { sm: true, kind: "secondary", onclick: async () => { const p = await bridge.pickFolder(inp.value.trim()); if (p) { inp.value = p; inp.dispatchEvent(new Event("input", { bubbles: true })); } } });
+          const pick = btn(t("choose_folder"), { sm: true, kind: "secondary", onclick: async () => { const p = await bridge.pickFolder(inp.value.trim()); if (p) { inp.value = p; store.set(parentOf(p)); inp.dispatchEvent(new Event("input", { bubbles: true })); } } });
           el = h("div.nb-row", { style: "flex-wrap:nowrap" }, h("div.nb-grow", inp), pick); el.focusEl = inp;
         } else el = inp;
         get = () => inp.value.trim(); set = (v) => { inp.value = v ?? ""; };

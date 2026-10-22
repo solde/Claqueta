@@ -43,13 +43,15 @@ Carpeta de usuario del sistema (`Claqueta`): macOS `~/Library/Application Suppor
 > El nombre visible de la app está en `desktop/brand.mjs`. Los identificadores internos (comandos `collado-api`/`collado-doc`/`collado-app`, cookies, variables `COLLADO_*`, carpetas del servidor) conservan el nombre `collado`; el servicio web sigue llamándose Collado.
 
 ## Carpeta local de cada proyecto
-Al crear o editar un programa (proyecto) hay un campo **Carpeta local** con el botón **Elegir carpeta…** (diálogo nativo del sistema; también se puede escribir la ruta). Esa carpeta es donde viven
-los archivos del proyecto: el botón **Abrir carpeta** de la ficha del programa y la sección **Proyectos** de la barra lateral de *Archivos* abren el gestor de archivos allí. Sin carpeta, todo
-sigue en la carpeta personal de Claqueta.
-- Cómo funciona: la carpeta se enlaza dentro del espacio de la persona en `Proyectos/<nombre>-<id>` (enlace simbólico; *junction* en Windows), así el gestor de archivos, la consola y el agente la alcanzan con las rutas de siempre sin ampliar sus permisos. Solo se reemplaza un enlace creado por Claqueta, nunca una carpeta real.
-- Mover a la papelera desde un proyecto que está en otro disco copia y borra (la papelera vive en el espacio de Claqueta).
-- **Doble clic en un archivo** (o Intro) lo abre con la aplicación predeterminada del sistema; Espacio sigue dando la vista previa. Los programas, scripts e instaladores (`.app`, `.exe`, `.sh`, `.command`, `.bat`…) no se ejecutan: se muestran en su carpeta. El proceso principal solo abre rutas dentro del espacio de Claqueta y solo a petición de su propia ventana.
-- No cambia dónde se guardan los **adjuntos** de las fichas (contratos, facturas…): siguen cifrados dentro de los datos de Claqueta.
+**Cada proyecto guarda sus archivos en su propia carpeta.** Se elige al **crear** el proyecto (campo *Carpeta local*, justo bajo el nombre, con el botón **Elegir carpeta…**; propone «última carpeta padre usada / nombre del proyecto») y se cambia en la **ficha del programa** (tarjeta *Carpeta local* › **Cambiar carpeta…**, o la pestaña Editar).
+- **Obligatoria, absoluta y única**: no puede estar vacía, no se puede repetir ni anidar con la carpeta de otro proyecto (uno dentro de otro), y si no existe se crea. Al cambiarla, los archivos ya existentes **no se mueven** (la ficha lo avisa).
+- **Qué se guarda ahí:** el `CLAUDE.md` del proyecto, todo lo que el agente genere, y una copia en claro de cada documento exportado desde la app (`Documentos/`, sin sobrescribir). Los **adjuntos** de las fichas (contratos, facturas…) siguen cifrados dentro de los datos de la app.
+- **Dónde se abre el gestor de archivos:** el botón **Abrir carpeta** de la ficha y *Archivos › Proyectos* abren ahí. Para el gestor, la carpeta se enlaza dentro del espacio de la persona en `Proyectos/<nombre>-<id>` (enlace simbólico; *junction* en Windows): consola y agente la alcanzan sin ampliar permisos. Solo se reemplaza un enlace creado por la app.
+- **Doble clic** (o Intro) abre el archivo con la aplicación predeterminada del sistema; Espacio da la vista previa. Programas, scripts e instaladores (`.app`, `.exe`, `.sh`…) no se ejecutan: se muestran en su carpeta. Mover a la papelera desde otro disco copia y borra.
+- Solo existe en la versión de escritorio: el servicio web no tiene este campo.
+
+## Inicio de sesión de Claude (automático)
+Al abrir la app sin sesión de Claude Code (o con *Configuración › Iniciar sesión en Claude Code*), la app ejecuta `claude auth login` por ti: **se abre el navegador solo**, autorizas y la ventana se cierra y reinicia la consola. Sin pasos en la consola. Si el navegador no se abre, la tarjeta ofrece el enlace y una casilla por si la página muestra un código. Requiere tener `claude` instalado (si no, lo explica). La sesión vive en el llavero del sistema con la configuración en el espacio de trabajo (`CLAUDE_CONFIG_DIR`). El acceso a Google Drive/OneDrive se abre igual, con el navegador y sin contraseñas en la app.
 
 ## Nube: Google Drive, OneDrive o una carpeta sincronizada
 *Configuración → Nube y sincronización…* lleva **todos los datos de Claqueta** a la nube para trabajar desde otro equipo: bases de datos de cada organización, adjuntos, `data.key`, la carpeta personal (archivos de trabajo) y la lista de organizaciones.

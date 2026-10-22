@@ -5,7 +5,7 @@ import { hook, create, update, rawGet, notify, label, getRow } from "./engine.mj
 import { has } from "./access.mjs";
 import { forbidden, bad, now, today, addDays, hhmmToMin, round2 } from "./util.mjs";
 import { EPISODE_STATUS } from "./schema/core.mjs";
-import { ensureProjectGuide } from "./project-guide.mjs";
+import { ensureProjectGuide, validateProjectFolder } from "./project-guide.mjs";
 
 const cents = (n) => Math.round(n);
 const pick = (data, existing, k) => (data[k] !== undefined ? data[k] : existing?.[k]);
@@ -251,5 +251,6 @@ export async function newBudgetVersion(ctx, id) {
   return cloneBudget(ctx, id, { version: max + 1, name: b.name });
 }
 
+hook("programs", "before", (op, ctx, data, ex) => { validateProjectFolder(op, data, ex); });
 // desktop: a programme with a local folder gets its own CLAUDE.md there (rules for the agent in that project), once
 hook("programs", "after", (op, ctx, row) => { ensureProjectGuide(row); });

@@ -13,6 +13,7 @@ import { internalKeys, safeEqual, verifyToken } from "./lib/agentd/keys.mjs";
 import { Users } from "./lib/agentd/users.mjs";
 import { Consoles } from "./lib/agentd/console.mjs";
 import { PtyConsoles } from "./lib/agentd/ptyconsole.mjs";
+import { ClaudeLogin } from "./lib/agentd/claudelogin.mjs";
 import { installToolLaunchers, which } from "./lib/agentd/platform.mjs";
 import { spawn } from "node:child_process";
 import { Supervisor } from "./lib/agentd/supervisor.mjs";
@@ -71,8 +72,8 @@ const status = (u) => ({ app: sup.status(), console: u ? myConsole(u) : {}, mode
 /** Is this person logged in to Claude Code? Only the answer of `claude auth status` (or, without it, the EXISTENCE of the credentials file) is used, never the credentials themselves.
  *  Desktop: the login lives in the keychain (macOS) under a name derived from the person's config dir, so the CLI is the only reliable judge. Cached for a few seconds (the tutorial polls). */
 const loginCache = new Map();
-async function claudeLoggedIn(name) {
-  const u = users.get(name); if (!u) return false;
+async function claudeLoggedIn(name, fresh = false) {
+  const u = users.get(name); if (!u) return false; if (fresh) loginCache.delete(name);
   const file = () => { try { return fs.statSync(path.join(users.homeOf(name), ".claude", ".credentials.json")).size > 0; } catch { return false; } };
   if (!DESKTOP) return file();
   const hit = loginCache.get(name); if (hit && Date.now() - hit.at < 3000) return hit.ok;
@@ -83,6 +84,7 @@ async function claudeLoggedIn(name) {
   }
   loginCache.set(name, { ok, at: Date.now() }); return ok;
 }
+const claudeLogin = DESKTOP ? new ClaudeLogin({ users, isLoggedIn: claudeLoggedIn, log, onDone: (u) => consoles.reset?.(u, "claude") }) : null;   // after a login the open Claude session restarts (it would keep asking for one)
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://x");
   try {
@@ -106,6 +108,14 @@ const server = http.createServer(async (req, res) => {
       return reply(await files.json(u, op, a.filter((x) => x !== undefined)));
     }
     const body = req.method === "POST" ? JSON.parse((await readBody(req)) || "{}") : {};
+    if (url.pathname.startsWith("/claude-login")) {   // automatic Claude login (desktop only, gateway only)
+      if (!claudeLogin) return json(res, 404, { error: "not found" }); if (w !== "gateway") return json(res, 403, { error: "forbidden" });
+      const name = url.searchParams.get("user"), u = name && users.ensure(name, (url.searchParams.get("perms") || "").split(",").filter(Boolean)); if (!u) return json(res, 400, { error: "user required" });
+      if (req.method === "GET") return json(res, 200, { ...claudeLogin.state(name), logged_in: await claudeLoggedIn(name) });
+      if (url.pathname === "/claude-login/code") return json(res, 200, { ok: claudeLogin.code(u, body.code) });
+      if (url.pathname === "/claude-login/cancel") { claudeLogin.cancel(u); return json(res, 200, { ok: true }); }
+      return json(res, 200, await claudeLogin.start(u));
+    }
     if (req.method === "GET" && url.pathname === "/claude-status") {   // is this person logged in to Claude Code? Only the EXISTENCE of the credentials file is checked, never its content
       if (w !== "gateway") return json(res, 403, { error: "forbidden" });
       const name = url.searchParams.get("user"), shared = "CLAUDE_CODE_OAUTH_TOKEN" in sharedClaude || "ANTHROPIC_API_KEY" in sharedClaude;

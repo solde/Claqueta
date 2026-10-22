@@ -191,7 +191,7 @@ async function boot() {
   startChild("agentd", "gateway/agentd.mjs", { ...common, AGENTD_PORT: String(agentdPort), APP_PORT: String(appPort), RENDER_URL: state.render.url, RENDER_KEY: renderKey, MAX_CONSOLE_USERS: "2" });
   startChild("gateway", "gateway/gateway.mjs", { ...common, PORT: String(gwPort), HOST: "127.0.0.1", GW_DIR: gwDir, AGENTD_URL: `http://127.0.0.1:${agentdPort}`, APP_URL: `http://127.0.0.1:${appPort}`,
     DESKTOP_NONCE: nonce, DESKTOP_USER: localUser(), DESKTOP_NAME: (() => { try { return os.userInfo().username; } catch { return ""; } })(), COOKIE_SECURE: "0", ALLOWED_HOSTS: "127.0.0.1,localhost",
-    SESSION_IDLE_H: "87600", SESSION_MAX_H: "87600", REQUIRE_2FA: "0" });
+    DESKTOP_NO_AUTOLOGIN: smoke ? "1" : "", SESSION_IDLE_H: "87600", SESSION_MAX_H: "87600", REQUIRE_2FA: "0" });
   const origin = `http://127.0.0.1:${gwPort}`;
   state.urls = { origin, login: `${origin}/_gw/desktop-login?nonce=${nonce}` };
   lockdown(session.defaultSession, new Set([origin, `http://localhost:${gwPort}`]));

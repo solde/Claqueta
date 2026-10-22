@@ -1,7 +1,7 @@
 // Programme list (cards) and the programme workspace: one place with every module filtered to the programme.
 import { h } from "../dom.js";
 import { api, entityApi, qs } from "../api.js";
-import { S, t, entName, fieldLabel, optLabel, fmt } from "../i18n.js";
+import { S, t, entName, fieldLabel, optLabel, fmt, errText } from "../i18n.js";
 import { btn, badge, statusBadge, icon, card, tabs, pageHead, emptyState, spinner, toast, modal, statusColor, ch, kv, progress } from "../ui.js";
 import { entityList, go } from "../lists.js";
 import { openForm, remember, refLabel, formFields, saveForm } from "../forms.js";
@@ -69,8 +69,15 @@ const BUILDERS = {
     const order = ["planned", "script", "recorded", "edited", "qc", "delivered", "aired"]; const pipe = d.pipeline.slice().sort((a, b) => order.indexOf(a.status) - order.indexOf(b.status)); const total = pipe.reduce((a, b) => a + b.n, 0);
     let budget = null; if (has("fin.view") && can("budgets")) { const b = (await api.get(`api/e/budgets?f.program_id=${id}&f.kind=budget&sort=-version&limit=5`, { silent: true }).catch(() => ({ rows: [] }))).rows.find((x) => x.status === "approved") || null; if (b) budget = await api.get(`api/reports/budget?budget=${b.id}`, { silent: true }).catch(() => null); }
     const nextMs = gantt?.tasks.filter((x) => x.status !== "done").slice(0, 4) || [];
+    const folderCard = S.schema?.entities?.programs?.fields?.folder ? card(h("div.nb-stack", h("div.nb-caption", fieldLabel("programs", "folder")), h("div.nb-mono", { style: "word-break:break-all" }, p.folder || "—"), h("div.nb-row",
+      p.folder && window.parent !== window && window.parent.colladoDesktop && btn(t("open_folder"), { kind: "secondary", sm: true, onclick: () => window.parent.postMessage({ type: "collado:open-folder", id, name: p.name, folder: p.folder }, location.origin) }),
+      btn(t("change_folder"), { kind: "secondary", sm: true, onclick: async () => {   // pick a new folder (native dialog when available, otherwise type the path) and save it on the programme; existing files are not moved
+        const bridge = window.parent !== window ? window.parent.colladoDesktop : null; let nf = bridge?.pickFolder ? await bridge.pickFolder(p.folder || "") : prompt(t("folder_hint"), p.folder || ""); nf = String(nf || "").trim(); if (!nf || nf === p.folder) return;
+        try { const r = await entityApi.update("programs", id, { folder: nf, rev: p.rev }); toast(t("folder_changed")); p.folder = r.folder; p.rev = r.rev; location.reload(); } catch (e) { toast(errText(e)); } } })),
+      h("div.nb-help", t("folder_move_note")))) : null;
     return h("div.cols2",
       h("div.stack",
+        folderCard,
         card(kv([[fieldLabel("programs", "logline"), p.logline], [fieldLabel("programs", "genre"), p.genre], [fieldLabel("programs", "slot_desc"), p.slot_desc], [fieldLabel("programs", "start_date"), fmt.date(p.start_date)], [fieldLabel("programs", "end_date"), fmt.date(p.end_date)], [fieldLabel("programs", "producer"), p.producer], [fieldLabel("programs", "executive"), p.executive], p.contract_value != null ? [fieldLabel("programs", "contract_value"), fmt.money(p.contract_value, p.currency)] : null]), { head: ch("tv", t("tab_overview")) }),
         card(total ? [h("div.pipeline", pipe.map((x) => h("i", { class: `c-${statusColor(x.status)}`, style: { flex: x.n } }, x.n))), h("div.legend", pipe.map((x) => h("span", h("i", { class: `c-${statusColor(x.status)}` }), `${optLabel("episodes", "status", x.status)} · ${x.n}`)))] : emptyState(t("empty_list")), { head: ch("film", t("pipeline")) }),
         budget && card([h("div.nb-row.between", h("b", `${budget.budget.name} v${budget.budget.version}`), h("span.nb-mono", `${fmt.money(budget.totals.actual + budget.totals.committed)} / ${fmt.money(budget.totals.planned_lines)}`)), progress(budget.totals.pct || 0, { warn: 90 }), hbars({ items: budget.chapters.map((c) => ({ label: optLabel("budget_lines", "chapter", c.chapter), value: c.actual + c.committed, color: "var(--nb-green)" })), money: true })], { head: ch("euro", t("tab_money")) })),

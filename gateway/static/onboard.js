@@ -115,7 +115,34 @@ const Tutor = (() => {
     if (!done) { try { sessionStorage.setItem(SKIP, "1"); } catch { /* ignore */ } }
     $("#dock-toggle")?.focus?.();
   }
+  // ---- desktop: automatic login. No steps in the console: the app starts `claude auth login`, the browser opens by itself and the person only has to authorise there ----------------------
+  let auto = null, autoTimer = null;
+  const AUTO_ERR = { not_installed: "Claude Code no está instalado en este equipo. Instálalo una vez (macOS/Linux: curl -fsSL https://claude.ai/install.sh | bash · Windows: irm https://claude.ai/install.ps1 | iex) y pulsa Reintentar.", login_failed: "No se completó el inicio de sesión.", timeout: "Se agotó el tiempo esperando la autorización.", cancelled: "Cancelado." };
+  function stopAuto() { clearInterval(autoTimer); autoTimer = null; auto?.remove(); auto = null; }
+  async function autoLogin() {
+    if (auto || !canConsole() || !has("agent.console")) return; stopAuto();
+    const status = el("p", { class: "coach-status wait", "aria-live": "polite" }, el("span", { class: "dot", "aria-hidden": "true" }), el("span", {}, "Abriendo el navegador para iniciar sesión en Claude…"));
+    const fallback = el("div", { hidden: true }), msg = (ok, t) => { status.className = "coach-status " + (ok === true ? "ok" : ok === false ? "bad" : "wait"); status.lastChild.textContent = t; };
+    auto = el("aside", { class: "coach", role: "dialog", "aria-label": "Iniciar sesión en Claude" }, el("div", { class: "coach-head" }, el("h2", {}, "Inicio de sesión en Claude")), el("p", {}, "Se abre tu navegador: inicia sesión y pulsa «Autorizar». Esta ventana se cierra sola al terminar."), status, fallback,
+      el("div", { class: "row end coach-nav" }, el("button", { class: "btn sm", type: "button", onclick: async () => { try { await api("agent/login/cancel", "POST"); } catch { /* ignore */ } stopAuto(); } }, "Cancelar")));
+    document.body.append(auto); let shownUrl = "";
+    const showFallback = (url) => {
+      if (shownUrl === url) return; shownUrl = url; const inp = el("input", { type: "text", placeholder: "Código (solo si la página te lo muestra)", autocomplete: "off", spellcheck: "false", "aria-label": "Código de autorización" });
+      const send = async () => { const v = inp.value.trim(); if (!v) return; try { await api("agent/login/code", "POST", { code: v }); inp.value = ""; toast("Código enviado"); } catch (e) { toast(e.message); } };
+      inp.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); send(); } });
+      fallback.hidden = false; fallback.replaceChildren(el("p", { class: "coach-hint" }, "¿No se abrió el navegador?"), el("div", { class: "row" }, el("a", { class: "btn sm primary", href: url, target: "_blank", rel: "noopener noreferrer" }, "Abrir el enlace ↗"),
+        el("button", { class: "btn sm", type: "button", onclick: async () => { try { await navigator.clipboard.writeText(url); toast("Enlace copiado"); } catch { toast("No se pudo copiar"); } } }, "Copiar enlace")), el("div", { class: "row" }, inp, el("button", { class: "btn sm", type: "button", onclick: send }, "Enviar")));
+    };
+    const fail = (code) => { clearInterval(autoTimer); autoTimer = null; msg(false, AUTO_ERR[code] || `No se pudo iniciar sesión (${code}).`); auto.querySelector(".coach-nav").prepend(el("button", { class: "btn sm primary", type: "button", onclick: () => { stopAuto(); autoLogin(); } }, "Reintentar")); };
+    try { const s0 = await api("agent/login/start", "POST"); if (s0.state === "error") return fail(s0.error); } catch (e) { return fail(e.message); }
+    autoTimer = setInterval(async () => {
+      let s; try { s = await api("agent/login/status"); } catch { return; }
+      if (s.logged_in || s.state === "done") { clearInterval(autoTimer); autoTimer = null; msg(true, "¡Sesión iniciada! Reiniciando la consola…"); toast("Claude Code: sesión iniciada"); try { connect("claude"); } catch { /* console not open */ } setTimeout(stopAuto, 1800); return; }
+      if (s.state === "error") return fail(s.error); if (s.url) { msg(null, "Esperando a que autorices en el navegador…"); showFallback(s.url); }
+    }, 1500);
+  }
   function open(force = false) {
+    if (ME.desktop) { if (!force && ME.noAutoLogin) return; if (force) { api("agent/login-status").then((r) => (r.logged_in ? toast("Claude Code ya tiene la sesión iniciada") : autoLogin())).catch(() => autoLogin()); } else autoLogin(); return; }
     if (card || !canConsole() || !has("agent.console")) return;
     if (!force) { try { if (sessionStorage.getItem(SKIP)) return; } catch { /* ignore */ } }
     try { sessionStorage.removeItem(SKIP); } catch { /* ignore */ }
@@ -129,5 +156,5 @@ const Tutor = (() => {
     if (!canConsole() || !has("agent.console")) return;
     try { const r = await api("agent/login-status"); if (r.logged_in === false) open(false); } catch { /* ignore */ }
   }
-  return { open, maybeStart, close, isOpen: () => !!card, loginUrl, unwrapLinks };
+  return { open, maybeStart, close, isOpen: () => !!card || !!auto, loginUrl, unwrapLinks, autoLogin };
 })();

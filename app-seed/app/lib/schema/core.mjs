@@ -1,6 +1,7 @@
 // Module A/B/I — programmes, seasons, episodes, planning, tasks, collaboration.
 import { f, req } from "./dsl.mjs";
 
+const DESKTOP = process.env.COLLADO_DESKTOP === "1";   // projects have their own local folder only in the desktop build
 export const PROGRAM_KINDS = ["magazine", "news", "gameshow", "documentary", "live_radio", "podcast", "series", "entertainment", "other"];
 export const EPISODE_STATUS = ["planned", "script", "recorded", "edited", "qc", "delivered", "aired"];
 
@@ -41,7 +42,7 @@ export default {
     board: { field: "status" },
     ext: { read: true },
     sections: [
-      { key: "main", fields: ["name", "code", "kind", "status", "channel_id", "client_id", "logline", "genre", "format_desc", "language", "color", "folder"] },
+      { key: "main", fields: ["name", ...(DESKTOP ? ["folder"] : []), "code", "kind", "status", "channel_id", "client_id", "logline", "genre", "format_desc", "language", "color"] },
       { key: "schedule", fields: ["start_date", "end_date", "duration_min", "episodes_per_season", "slot_desc", "template_id"] },
       { key: "money", fields: ["contract_value", "currency"] },
       { key: "team", fields: ["producer", "executive", "notes"] },
@@ -54,7 +55,7 @@ export default {
       client_id: f.ref("partners", { help: "who is invoiced, if not the network" }),
       logline: f.long({ max: 1000 }), genre: f.text({ max: 80 }), format_desc: f.long({ max: 8000 }),
       language: f.enm(["es", "ca", "en", "other"]), color: f.text({ max: 9, format: "color", default: "#2b6cb0" }),
-      folder: f.folder({ help: "folder on this computer where the project's files live; the file manager opens there" }),
+      ...(DESKTOP ? { folder: req(f.folder({ help: "Carpeta de este equipo donde el proyecto guarda sus archivos (distinta para cada proyecto). El gestor de archivos se abre aquí." })) } : {}),
       start_date: f.date(), end_date: f.date(), duration_min: f.int({ min: 0, max: 1000 }),
       episodes_per_season: f.int({ min: 0, max: 1000 }), slot_desc: f.text({ max: 200 }),
       template_id: f.ref("workflow_templates"),

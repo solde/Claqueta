@@ -562,7 +562,7 @@ async function boot() {
     el("button", { onclick: () => { closePop(); applyTheme(document.documentElement.dataset.theme === "dark" || (!document.documentElement.dataset.theme && matchMedia("(prefers-color-scheme: dark)").matches) ? "light" : "dark"); } }, "Cambiar tema claro/oscuro"),
     el("button", { onclick: () => { closePop(); Tour.open(); } }, "Recorrido por la plataforma"),
     ME.desktop && window.colladoDesktop?.cloud ? el("button", { onclick: () => { closePop(); cloudDialog(); } }, "Nube y sincronización…") : false,
-    has("agent.console") ? el("button", { onclick: () => { closePop(); Tutor.open(true); } }, "Tutorial: iniciar sesión en Claude Code") : false,
+    has("agent.console") ? el("button", { onclick: () => { closePop(); Tutor.open(true); } }, (ME.desktop ? "Iniciar sesión en Claude Code" : "Tutorial: iniciar sesión en Claude Code")) : false,
     ME.desktop ? false : el("button", { onclick: () => { closePop(); passwordDialog(false); } }, "Cambiar contraseña"),
     ME.desktop ? false : el("button", { onclick: async () => { closePop(); if (ME.user.totp) toast("La verificación en dos pasos ya está activa. Un administrador puede restablecerla si pierdes el móvil."); else await enrollDialog(false); } }, "Verificación en dos pasos"),
     ME.desktop ? false : el("button", { onclick: async () => { await api("logout", "POST").catch(() => {}); location.replace("/login"); } }, "Cerrar sesión")].filter(Boolean));   // replaceChildren would print `false` as text

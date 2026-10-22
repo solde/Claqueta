@@ -191,7 +191,7 @@ async function api(req, res, url) {
     auth.logout(c.token); aud(c, "logout");
     res.setHeader("set-cookie", setCookie("", 0)); return sendJson(res, 200, { ok: true });
   }
-  if (p === "me" && m === "GET") return sendJson(res, 200, { user: me, catalogue: PERMISSIONS, platform: PLATFORM_PERMS, org: c.org ? { slug: c.org, name: c.orgName } : null, ...(DESKTOP ? { desktop: true, appName: APP_NAME } : {}) });
+  if (p === "me" && m === "GET") return sendJson(res, 200, { user: me, catalogue: PERMISSIONS, platform: PLATFORM_PERMS, org: c.org ? { slug: c.org, name: c.orgName } : null, ...(DESKTOP ? { desktop: true, appName: APP_NAME, ...(env.DESKTOP_NO_AUTOLOGIN === "1" ? { noAutoLogin: true } : {}) } : {}) });
   if (p === "me/org" && m === "POST") {   // jump to another organization (a super-admin: any; everybody else: the ones they belong to)
     const { org } = await readJson(req); const o = auth.switchOrg(c.token, String(org || ""));
     const nc = ctx(req);
@@ -225,6 +225,13 @@ async function api(req, res, url) {
     need(c, "agent.console");
     try { const r = await agentd("GET", `/claude-status?user=${encodeURIComponent(me.username)}`); return sendJson(res, 200, { logged_in: !!(r.logged_in || r.shared), shared: !!r.shared }); }
     catch { return sendJson(res, 200, { logged_in: null }); }
+  }
+  if (DESKTOP && p.startsWith("agent/login")) {   // automatic Claude login (see agentd/claudelogin.mjs)
+    need(c, "agent.console"); const sub = p.slice("agent/login".length) || "/status", q = `user=${encodeURIComponent(me.username)}&perms=${encodeURIComponent([...c.perms].join(","))}`;
+    if (sub === "/status" && m === "GET") return sendJson(res, 200, await agentd("GET", `/claude-login?${q}`));
+    if (sub === "/start" && m === "POST") { aud(c, "agent.login.start"); return sendJson(res, 200, await agentd("POST", `/claude-login?${q}`, {})); }
+    if (sub === "/code" && m === "POST") { const { code } = await readJson(req, 4e3); return sendJson(res, 200, await agentd("POST", `/claude-login/code?${q}`, { code })); }
+    if (sub === "/cancel" && m === "POST") return sendJson(res, 200, await agentd("POST", `/claude-login/cancel?${q}`, {}));
   }
   if (p === "agent/send" && m === "POST") {
     need(c, "agent.console");

@@ -11,6 +11,7 @@ import * as F from "./files.mjs";
 import * as J from "./jobs.mjs";
 import { clientDict, normLang } from "./i18n/index.mjs";
 import { listSources } from "./docs/datasets.mjs";
+import { copyExportToProject } from "./project-guide.mjs";
 import { renderDocument, buildDocument, capabilities, FORMATS } from "./docs/render.mjs";
 import { renderHtml } from "./docs/html.mjs";
 import { lintDocument } from "./docs/lint.mjs";
@@ -106,7 +107,8 @@ on("POST", "/api/docs/render", async (ctx, req) => {
     if (!has(ctx, "app.edit")) throw forbidden("needs:app.edit");
     const ex = await E.create(ctx, "exports", { name, format: r.ext, program_id: b.program_id || null, document_id: b.document_id || null, bytes: r.buffer.length, notes: (r.warnings || []).slice(0, 5).join("; ") });
     const att = F.addFile(ctx, { entity: "exports", id: ex.id, name, mime: r.mime.split(";")[0], buffer: r.buffer, shared: !!b.shared });
-    return created({ export_id: ex.id, attachment_id: att.id, name, bytes: r.buffer.length, warnings: r.warnings });
+    const copy = copyExportToProject(b.program_id, name, r.buffer);   // desktop: also a plain copy in the programme's own folder
+    return created({ export_id: ex.id, attachment_id: att.id, name, bytes: r.buffer.length, warnings: r.warnings, ...(copy ? { project_file: copy } : {}) });
   }
   if (format === "png") return ok({ ...JSON.parse(r.buffer.toString("utf8")), warnings: r.warnings });
   return { status: 200, raw: r.buffer, type: r.mime, headers: { "content-disposition": `attachment; filename="${name}"`, "x-collado-warnings": encodeURIComponent(JSON.stringify(r.warnings || [])) } };

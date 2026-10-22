@@ -57,7 +57,7 @@ test("project CLAUDE.md: written in the project's own folder once, from the temp
   const body = fs.readFileSync(file, "utf8"); assert.match(body, /# Proyecto: La Mañana en Directo \(LMD\)/); assert.match(body, new RegExp(`#${p.id}`)); assert.match(body, new RegExp(`collado-doc check --program ${p.id}`)); assert.ok(body.includes(proj) && body.includes("Claqueta") && !body.includes("{{"));
   assert.ok(body.includes(path.join(shared, "agent")), "points at the shared guidelines (plain text, not an @import)"); assert.ok(!/^@/m.test(body), "no @imports: a path with spaces would break them");
   fs.writeFileSync(file, "# Mis reglas\n"); await E.update(ctx, "programs", p.id, { name: "Otra" }); assert.equal(fs.readFileSync(file, "utf8"), "# Mis reglas\n", "never overwritten");
-  for (const folder of ["relativa/ruta", path.join(T, "no-existe"), path.join(proj, "CLAUDE.md")]) await assert.doesNotReject(E.create(ctx, "programs", { name: "X" + Math.random(), folder })); assert.ok(!fs.existsSync(path.join(T, "no-existe")));
+  await assert.rejects(E.create(ctx, "programs", { name: "Rel", folder: "relativa/ruta" }), /folder_not_absolute/); const fresh = path.join(T, "otro-nuevo"); await E.create(ctx, "programs", { name: "Nuevo", folder: fresh }); assert.ok(fs.existsSync(path.join(fresh, "CLAUDE.md")), "a folder that did not exist is created");
   const q2 = path.join(T, "otro"); fs.mkdirSync(q2); process.env.COLLADO_DESKTOP = "0"; await E.create(ctx, "programs", { name: "Web", folder: q2 }); assert.ok(!fs.existsSync(path.join(q2, "CLAUDE.md")), "only the desktop build writes into folders");
 });
 
