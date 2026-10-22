@@ -5,6 +5,7 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { isMainThread, parentPort } from "node:worker_threads";
 import { openDb, syncSchema, inOrg, setOrgInit, closeAll, currentSlug, listOrgSlugs, LEGACY_ORG } from "./lib/db.mjs";
 import { initKey, setOrgResolver } from "./lib/crypto.mjs";
 import { initFiles, sweepFiles } from "./lib/files.mjs";
@@ -68,3 +69,4 @@ const server = http.createServer(async (req, res) => {
 });
 server.listen(PORT, HOST, () => log(`collado app on http://${HOST}:${PORT}, data in ${DATA}`));
 for (const sig of ["SIGTERM", "SIGINT"]) process.on(sig, () => { server.close(); closeAll(); process.exit(0); });
+if (!isMainThread) parentPort.on("message", (m) => { if (m === "shutdown") { server.close(); closeAll(); process.exit(0); } });   // desktop: running as a worker of agentd, which asks for a clean stop

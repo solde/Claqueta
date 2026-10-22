@@ -69,8 +69,9 @@ export class PtyConsoles {
     const s = this.ensure(u, "claude"); if (!s.alive) throw new Error("claude_unavailable");
     s.proc.write(`\x1b[200~${text}\x1b[201~`); setTimeout(() => { try { if (s.alive) s.proc.write("\r"); } catch { /* exited */ } }, 250);
   }
+  /** Claude Code with nobody looking at it for a while is stopped to give its memory back; the conversation resumes with --continue the next time. */
   reap() {
-    for (const [k, s] of this.sessions) if (s.alive && !s.views.size && Date.now() - Math.max(s.lastOut, this.seen.get(k.split("/")[0]) || 0) > this.idleMs) { try { s.proc.kill(); } catch { /* gone */ } this.log(`console ${k} reaped after inactivity`); }
+    for (const [k, s] of this.sessions) if (s.alive && !s.views.size && k.endsWith("/claude") && Date.now() - Math.max(s.lastOut, this.seen.get(k.split("/")[0]) || 0) > this.idleMs) { try { s.proc.kill(); } catch { /* gone */ } this.log(`console ${k} reaped after inactivity`); }
   }
   /** Ends a session (and forgets its screen) so the next attach starts a fresh one. */
   reset(u, name) { const k = this.key(u, name), s = this.sessions.get(k); if (!s) return; s.alive = false; try { s.proc?.kill(); } catch { /* gone */ } for (const v of s.views) { try { v.exit(); } catch { /* closed */ } } this.sessions.delete(k); }

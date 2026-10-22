@@ -90,7 +90,7 @@ function serveStatic(res, rel, csp = SHELL_CSP, req = null) {
   const h = { "content-type": TYPES[ext] || "application/octet-stream", "content-security-policy": csp, "cache-control": ext === ".woff2" ? "public, max-age=31536000, immutable" : "no-cache", etag };
   if (req && req.headers["if-none-match"] === etag) return send(res, 304, "", h);
   // desktop build: the Neumorphism skin (neu.css) is switched on from here, so the web service serves exactly the same HTML as before
-  if (DESKTOP && ext === ".html") return send(res, 200, fs.readFileSync(file, "utf8").replace("<html ", '<html data-skin="neu" ').replace("</head>", '<link rel="stylesheet" href="/_gw/static/neu.css">\n</head>').replaceAll("Collado", APP_NAME), h);
+  if (DESKTOP && ext === ".html") return send(res, 200, fs.readFileSync(file, "utf8").replace("<html ", '<html data-skin="neu" ').replace("</head>", '<link rel="stylesheet" href="/_gw/static/neu.css">\n</head>').replace(/<script src="\/_gw\/static\/vendor\/qrcode\.js"><\/script>\n?/, "").replaceAll("Collado", APP_NAME), h);
   send(res, 200, fs.readFileSync(file), h);
 }
 
@@ -428,5 +428,5 @@ function bridgeTerminal(ws, c, session, perm, url) {
 }
 
 server.listen(PORT, BIND, () => console.log(`collado gateway on ${BIND || ""}:${PORT}, auth in ${GW_DIR}, users: ${auth.listUsers().length}${DESKTOP ? " (desktop)" : ""}`));
-for (const sig of ["SIGTERM", "SIGINT"]) process.on(sig, () => { server.close(); process.exit(0); });
-if (DESKTOP) { process.stdin.resume(); process.stdin.on("end", () => process.exit(0)); process.stdin.on("error", () => process.exit(0)); }
+if (!env.COLLADO_HUB) for (const sig of ["SIGTERM", "SIGINT"]) process.on(sig, () => { server.close(); process.exit(0); });   // in the hub, agentd handles shutdown
+if (DESKTOP && !env.COLLADO_HUB) { process.stdin.resume(); process.stdin.on("end", () => process.exit(0)); process.stdin.on("error", () => process.exit(0)); }

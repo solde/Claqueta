@@ -157,7 +157,7 @@ function initDock() {
   sp.addEventListener("keydown", (e) => { if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return; e.preventDefault(); setPct($("#pane-console").getBoundingClientRect().width + (e.key === "ArrowLeft" ? 40 : -40), true); });
   document.addEventListener("keydown", (e) => { if (e.ctrlKey && e.altKey && e.key.toLowerCase() === "c") { e.preventDefault(); setDock(!dockOpen); } });   // Ctrl+Alt+C
   // wide screens: console open by default (that is why the portal exists); phones: closed until asked for
-  const pref = store.get("collado.dock"); setDock(pref ? pref === "open" && matchMedia("(min-width: 901px)").matches : matchMedia("(min-width: 901px)").matches, { remember: false });
+  const pref = store.get("collado.dock"); setDock(pref ? pref === "open" && matchMedia("(min-width: 901px)").matches : !ME.desktop && matchMedia("(min-width: 901px)").matches, { remember: false });   // desktop: closed until asked for (an open console starts Claude Code, ~220 MB)
 }
 
 // ---- console (xterm.js + WebSocket to the persistent tmux session) --------------------------------------------------------------------------

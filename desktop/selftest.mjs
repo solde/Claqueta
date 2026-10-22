@@ -126,6 +126,11 @@ export async function runChecks(win, { renderUrl, renderKey, outDir, lastOpened,
     return { ok: r.none[0] === 400 && /^required/.test(r.none[1]) && /^folder_in_use/.test(r.dup) && /^folder_overlaps/.test(r.inner) && r.rel === "folder_not_absolute" && r.changed === moved && r.empty === 400 && r.card && fs.existsSync(second) && fs.existsSync(moved), ...r };
   });
   await check("claude login (automatic): the endpoints exist, report idle and not logged in for a fresh workspace", () => page(`const s = await (await fetch("/_gw/api/agent/login/status")).json(); return { ok: s.state === "idle" && s.logged_in === false, s };`));
+  await check("the app server (a worker thread of the hub) restarts cleanly on demand and comes back healthy with its data", () => page(`
+    const H = { "x-requested-with": "collado" }; const before = await (await fetch("/app/api/e/programs?limit=1")).json();
+    const r = await fetch("/_gw/api/service/restart", { method: "POST", headers: H }); if (!r.ok) return { ok: false, step: "restart", status: r.status };
+    let healthy = false; for (let i = 0; i < 60 && !healthy; i++) { await new Promise((x) => setTimeout(x, 500)); try { healthy = (await (await fetch("/_gw/api/service/status")).json()).app.healthy === true; } catch { /* still down */ } }
+    const after = await (await fetch("/app/api/e/programs?limit=1")).json(); return { ok: healthy && (after.total ?? after.rows?.length) === (before.total ?? before.rows?.length), healthy, before: before.total, after: after.total };`));
   await check("claude login status: a fresh workspace is NOT logged in, even when the user is logged in elsewhere on this Mac (own config dir, real HOME)", () => page(`const r = await (await fetch("/_gw/api/agent/login-status")).json(); return { ok: r.logged_in === false, r };`));
   await check("claude login helper: a link that Claude Code hard-wraps over several rows is read back whole", () => page(String.raw`
     const U = "https://claude.com/cai/oauth/authorize?code=true&client_id=9d1c250a-e61b-44d9-88ed-5944d1962f5e&response_type=code&redirect_uri=https%3A%2F%2Fplatform.claude.com%2Foauth%2Fcode%2Fcallback&scope=org%3Acreate_api_key+user%3Aprofile+user%3Ainference&code_challenge=u6bEdLRQic--1rC&code_challenge_method=S256&state=boBAe37wXB0lZkrVeKuir0yahCEgTgRwi0gUlPCQnoQ";

@@ -3,17 +3,19 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
+import { Worker } from "node:worker_threads";
+import { EventEmitter } from "node:events";
 import { UID_APP, GID_DEV } from "./users.mjs";
 import { NODE_ENV, baseEnv } from "./platform.mjs";
 
 const GIT_ENV = { GIT_AUTHOR_NAME: "collado", GIT_AUTHOR_EMAIL: "collado@localhost", GIT_COMMITTER_NAME: "collado", GIT_COMMITTER_EMAIL: "collado@localhost", GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "safe.directory", GIT_CONFIG_VALUE_0: "*" };
 
 export class Supervisor {
-  constructor({ root, dirs, appPort, nodeBin = process.execPath, env = {}, log = () => {}, keys, ctlUrl, managed = true }) {
+  constructor({ root, dirs, appPort, nodeBin = process.execPath, env = {}, log = () => {}, keys, ctlUrl, managed = true, inProcess = false }) {
     // managed = false (desktop): the app is the read-only copy bundled with the program: no git snapshots, no file watching, no rollback
-    Object.assign(this, { root, dirs, appPort, nodeBin, baseEnv: env, log, keys, ctlUrl, managed });
+    Object.assign(this, { root, dirs, appPort, nodeBin, baseEnv: env, log, keys, ctlUrl, managed, inProcess: inProcess && !root });   // inProcess (desktop): the app runs in a worker thread of this process instead of its own process (saves a whole Node runtime, ~60 MB)
     this.lines = []; this.s = { child: null, state: "stopped", pid: null, started: 0, restarts: 0, lastExit: null, healthy: false, want: true, timer: null, backoff: 1000, lastSnapshot: null };
-    setInterval(() => this.probe(), 2000).unref();
+    this.tick = 0; setInterval(() => { if (!this.s.healthy || ++this.tick % 5 === 0) this.probe(); }, 2000).unref();   // every 2 s while starting or unhealthy, every 10 s once healthy
   }
   push(src, chunk) { for (const l of String(chunk).split("\n")) if (l.trim()) { this.lines.push(`${new Date().toISOString().slice(11, 19)} ${src} ${l}`); if (this.lines.length > 1500) this.lines.shift(); } }
   /** run a command as the app user (or as ourselves without root) */
@@ -39,7 +41,11 @@ export class Supervisor {
       APP_KEY: this.keys?.app || "", COLLADO_TOKEN_KEY: this.keys?.token || "", AGENTD_URL: this.ctlUrl, ...this.baseEnv };
     const flags = this.baseEnv.APP_FLAGS || "--max-old-space-size=320";
     let child;
-    if (this.root) { const [c, a] = this.#cmd(["env", "-i", ...Object.entries(env).map(([k, v]) => `${k}=${v}`), this.nodeBin, flags, "server.mjs"]); child = spawn(c, a, { cwd: this.dirs.app, stdio: ["ignore", "pipe", "pipe"] }); }
+    if (this.inProcess) {
+      const w = new Worker(path.join(this.dirs.app, "server.mjs"), { env: { ...baseEnv(), ...NODE_ENV, ...env }, resourceLimits: { maxOldGenerationSizeMb: 320 }, stdout: true, stderr: true });
+      child = Object.assign(new EventEmitter(), { stdout: w.stdout, stderr: w.stderr, pid: w.threadId, kill: (sig) => { if (sig === "SIGKILL") w.terminate(); else { w.postMessage("shutdown"); setTimeout(() => w.terminate(), 2500).unref(); } } });   // same surface as a ChildProcess
+      w.on("exit", (code) => child.emit("exit", code, null)); w.on("error", (e) => this.push("err", `worker error: ${e.stack || e.message}`));
+    } else if (this.root) { const [c, a] = this.#cmd(["env", "-i", ...Object.entries(env).map(([k, v]) => `${k}=${v}`), this.nodeBin, flags, "server.mjs"]); child = spawn(c, a, { cwd: this.dirs.app, stdio: ["ignore", "pipe", "pipe"] }); }
     else child = spawn(this.nodeBin, [flags, "server.mjs"], { cwd: this.dirs.app, stdio: ["ignore", "pipe", "pipe"], env: { ...baseEnv(), ...NODE_ENV, ...env } });   // same as `env -i`, but portable (Windows has no `env`)
     child.on("error", (e) => this.push("sup", `spawn error: ${e.message}`));
     s.child = child; s.pid = child.pid; this.push("sup", `start pid ${child.pid}`);

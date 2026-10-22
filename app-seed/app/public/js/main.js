@@ -106,7 +106,8 @@ async function boot() {
   if (EMBEDDED) main.before(banner);
   const on = () => { if ($("#offline")) $("#offline").hidden = navigator.onLine; banner.hidden = navigator.onLine; if (navigator.onLine) flush((n) => { toast(t("synced", { n }), "ok"); route(); }); };
   window.addEventListener("online", on); window.addEventListener("offline", on); on();
-  if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+  // The service worker is for the web build (offline cache of a remote server). On the desktop the server is on this computer: it would only intercept and copy every request. Remove it if an old one exists.
+  if ("serviceWorker" in navigator) { if (document.documentElement.dataset.skin === "neu") navigator.serviceWorker.getRegistrations().then((rs) => rs.forEach((r) => r.unregister())).catch(() => {}); else navigator.serviceWorker.register("sw.js").catch(() => {}); }
   if (EMBEDDED) { const lay = () => window.parent.postMessage({ type: "collado:layout", compact: window.innerWidth <= 860 }, location.origin); window.addEventListener("resize", lay); lay(); }
   window.addEventListener("message", (e) => {
     if (e.origin !== location.origin) return; const d = e.data || {};

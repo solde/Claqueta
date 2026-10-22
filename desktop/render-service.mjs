@@ -15,21 +15,25 @@ const safeEqual = (a, b) => { const x = Buffer.from(String(a ?? "")), y = Buffer
 let busy = 0; const queue = [];
 async function limited(fn, max = 2) { if (busy >= max) await new Promise((r) => queue.push(r)); busy++; try { return await fn(); } finally { busy--; queue.shift()?.(); } }
 
+// One warm hidden window per kind (PDF: no JavaScript; SVG: needs a canvas), closed after a minute without jobs: a new Chromium renderer per request cost ~80 MB and ~300 ms each time.
+const pool = new Map();
+async function withWindow(js, fn) {
+  let e = pool.get(js); if (!e || e.win.isDestroyed()) { e = { win: hidden(js), busy: false, timer: null }; pool.set(js, e); }
+  while (e.busy) await new Promise((r) => setTimeout(r, 20));
+  e.busy = true; clearTimeout(e.timer);
+  try { return await fn(e.win); } finally { e.busy = false; e.timer = setTimeout(() => { if (!e.busy && !e.win.isDestroyed()) e.win.destroy(); pool.delete(js); }, 60_000); e.timer.unref?.(); }
+}
 const hidden = (js) => new BrowserWindow({ show: false, width: 1280, height: 900, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, javascript: js, backgroundThrottling: false, spellcheck: false } });
 
 async function htmlToPdf(html) {
   const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "collado-pdf-")), "doc.html"); fs.writeFileSync(file, html);
-  const win = hidden(false);
-  try {
-    await win.loadFile(file);
-    return await win.webContents.printToPDF({ preferCSSPageSize: true, printBackground: true, displayHeaderFooter: false, generateTaggedPDF: true });
-  } finally { win.destroy(); fs.rmSync(path.dirname(file), { recursive: true, force: true }); }
+  try { return await withWindow(false, async (win) => { await win.loadFile(file); return await win.webContents.printToPDF({ preferCSSPageSize: true, printBackground: true, displayHeaderFooter: false, generateTaggedPDF: true }); }); }
+  finally { fs.rmSync(path.dirname(file), { recursive: true, force: true }); }
 }
 
 async function svgToPng(svg, width) {
-  const win = hidden(true);
-  try {
-    await win.loadURL("data:text/html;charset=utf-8,<!doctype html><canvas id=c></canvas>");
+  return withWindow(true, async (win) => {
+    if (!win.webContents.getURL()) await win.loadURL("data:text/html;charset=utf-8,<!doctype html><canvas id=c></canvas>");
     const dataUrl = `data:image/svg+xml;base64,${Buffer.from(svg, "utf8").toString("base64")}`;
     const png = await win.webContents.executeJavaScript(`(async () => {
       const img = new Image(); img.src = ${JSON.stringify(dataUrl)}; await img.decode();
@@ -37,7 +41,7 @@ async function svgToPng(svg, width) {
       const c = document.getElementById("c"); c.width = w; c.height = h; const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, w, h); g.drawImage(img, 0, 0, w, h);
       return c.toDataURL("image/png").split(",")[1]; })()`);
     return Buffer.from(png, "base64");
-  } finally { win.destroy(); }
+  });
 }
 
 /** Starts the local service. Returns { url, close }. */
@@ -52,7 +56,7 @@ export function startRenderService(key) {
       const body = Buffer.concat(chunks);
       let out, type;
       if (url.pathname === "/pdf") { out = await limited(() => htmlToPdf(body.toString("utf8"))); type = "application/pdf"; }
-      else if (url.pathname === "/svg-png") { out = await limited(() => svgToPng(body.toString("utf8"), Number(url.searchParams.get("width")) || 1440), 3); type = "image/png"; }
+      else if (url.pathname === "/svg-png") { out = await limited(() => svgToPng(body.toString("utf8"), Number(url.searchParams.get("width")) || 1440), 1); type = "image/png"; }
       else return fail(404, "not found");
       res.writeHead(200, { "content-type": type, "content-length": out.length }); res.end(out);
     } catch (e) { console.error("render service:", e); fail(500, String(e.message || e)); }

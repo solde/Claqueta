@@ -69,6 +69,15 @@ Google y Microsoft exigen que la app esté registrada. Sin los identificadores e
 - **Microsoft:** [entra.microsoft.com](https://entra.microsoft.com) → *Registros de aplicaciones* → nuevo → cuentas «en cualquier directorio y cuentas personales» → *Autenticación* → plataforma **Aplicaciones móviles y de escritorio** con URI `http://localhost` y «Permitir flujos de cliente público» → *Permisos de API*: `Files.ReadWrite.AppFolder` y `offline_access` → copia el Id. de aplicación (cliente).
 - Mientras la sincronización esté conectada, **Claqueta usa internet** para esto (solo a `accounts.google.com`, `oauth2.googleapis.com`, `www.googleapis.com`, `login.microsoftonline.com`, `graph.microsoft.com` y a las URL de descarga/subida que devuelven esas APIs). Desconectada, no toca la red.
 
+## Rendimiento (consumo en reposo)
+Medido en macOS arm64 con la app recién abierta, sin sesión de Claude activa (`ps`, suma de todos los procesos): **antes 1072 MB / 0,63 % CPU → ahora 619 MB / 0,33 %** (una app Electron vacía ocupa 371 MB: ese es el suelo).
+- **Un solo proceso Node** para gateway + agentd (`desktop/hub.mjs`) y el servidor de la app como **hilo (worker)** de ese proceso, con su tope de 320 MB y reinicio limpio: antes eran tres procesos (~290 MB). `COLLADO_APP_PROCESS=1` vuelve al proceso separado.
+- **Claude Code no se arranca solo**: la consola empieza cerrada y Claude se inicia al abrirla; con nadie mirándolo durante 45 min se detiene (la conversación se reanuda con `--continue`). Un Claude activo son ~200 MB.
+- **Sin service worker** en escritorio (solo interceptaba y copiaba cada petición del servidor local) ni la librería de QR (no hay 2FA).
+- **Ventana de render reutilizada** para PDF y gráficos (antes un renderer de Chromium nuevo por petición); se cierra tras 1 min sin uso.
+- El supervisor sondea cada 10 s una vez sano (antes cada 2 s); el código de pruebas solo se carga al probar.
+Sin cambios de comportamiento visibles: 78 tests y 27 comprobaciones reales dentro de la ventana.
+
 ## Pautas del agente (CLAUDE.md) y caja de herramientas
 - **CLAUDE.md de cada persona** (en su espacio de trabajo, `data/homes/<usuario>/CLAUDE.md`): importa `AGENT.md` (pautas generales), **`AGENT.desktop.md`** (entorno de escritorio: rutas, carpeta de proyecto, qué cambia respecto al servidor, no usar la skill de servicio) y `TEAM.md`. Como la carpeta de datos de macOS tiene un espacio (`Application Support`) y un `@import` no admite espacios, las rutas se escriben **relativas** (`@../../shared/agent/AGENT.md`). Un CLAUDE.md anterior se repara sin tocar el texto de la persona.
 - **CLAUDE.md de cada proyecto**: al guardar un programa con *Carpeta local*, se crea **una vez** un `CLAUDE.md` en esa carpeta (plantilla `PROJECT.template.md`) con los datos del programa, dónde guardar cada cosa y los pasos al empezar (leer la ficha, **comprobar las herramientas**). Nunca se sobrescribe; si no se puede escribir (disco de solo lectura, carpeta de la nube sin montar) se ignora.

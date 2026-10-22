@@ -39,8 +39,8 @@ const apiUrl = `http://127.0.0.1:${APP_PORT}`, ctlUrl = `http://127.0.0.1:${PORT
 const sharedClaude = Object.fromEntries(["CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY"].filter((k) => env[k]).map((k) => [k, env[k]]));
 const users = new Users({ root: ROOT, homes: HOMES, shared: D.shared, state: STATE, apiUrl, ctlUrl, tokenKey: keys?.token || "dev-token-key", log, sharedClaude, portable: DESKTOP, toolsDir: DESKTOP ? (env.TOOLS_DIR || path.join(HERE, "..", "tools")) : "", appName: env.APP_DISPLAY_NAME || "Collado" });
 const APP_PASSTHROUGH = ["APP_FLAGS", "MAX_JOBS", "AGENT_JOB_CMD", "RENDER_URL", "RENDER_KEY", "COLLADO_DESKTOP", "APP_DISPLAY_NAME"];   // the only variables the app inherits from agentd
-const sup = new Supervisor({ root: ROOT, dirs: D, appPort: APP_PORT, env: Object.fromEntries(APP_PASSTHROUGH.filter((k) => env[k]).map((k) => [k, env[k]])), log, keys, ctlUrl, managed: !DESKTOP });
-const consoles = DESKTOP ? new PtyConsoles({ users, agentCmd: env.AGENT_BIN || "claude", shellCmd: env.SHELL_BIN || "", maxUsers: Number(env.MAX_CONSOLE_USERS || 6), idleHours: Number(env.CONSOLE_IDLE_HOURS || 12), log }) : new Consoles({ users, tmuxBin: env.TMUX_BIN || "tmux", tmuxConf: env.TMUX_CONF || path.join(HERE, "tmux.conf"), agentCmd: env.AGENT_CMD || "claude --continue || exec claude", shellCmd: env.SHELL_CMD || "bash -l",
+const sup = new Supervisor({ root: ROOT, dirs: D, appPort: APP_PORT, env: Object.fromEntries(APP_PASSTHROUGH.filter((k) => env[k]).map((k) => [k, env[k]])), log, keys, ctlUrl, managed: !DESKTOP, inProcess: DESKTOP && env.COLLADO_APP_PROCESS !== "1" });
+const consoles = DESKTOP ? new PtyConsoles({ users, agentCmd: env.AGENT_BIN || "claude", shellCmd: env.SHELL_BIN || "", maxUsers: Number(env.MAX_CONSOLE_USERS || 6), idleHours: Number(env.CONSOLE_IDLE_HOURS || 0.75), log }) : new Consoles({ users, tmuxBin: env.TMUX_BIN || "tmux", tmuxConf: env.TMUX_CONF || path.join(HERE, "tmux.conf"), agentCmd: env.AGENT_CMD || "claude --continue || exec claude", shellCmd: env.SHELL_CMD || "bash -l",
   maxUsers: Number(env.MAX_CONSOLE_USERS || 6), idleHours: Number(env.CONSOLE_IDLE_HOURS || 12), log });
 const jobs = new Jobs({ users, jobCmd: env.AGENT_JOB_CMD, log });
 const files = new Files({ users, maxUploadMb: Number(env.FILES_MAX_UPLOAD_MB || 200) });
@@ -174,7 +174,7 @@ server.on("upgrade", (req, socket, head) => {
   if (url.pathname !== "/term" || who(req) !== "gateway") { socket.destroy(); return; }
   wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req, url));
 });
-setInterval(() => consoles.reap(), 10 * 60e3).unref();
+setInterval(() => consoles.reap(), (DESKTOP ? 1 : 10) * 60e3).unref();
 setInterval(() => { for (const u of consoles.active()) users.refreshToken(u); }, 6 * 3600e3).unref();
 server.listen(PORT, "127.0.0.1", () => { log(`agentd on 127.0.0.1:${PORT}; app dir ${D.app}; mode ${DESKTOP ? "desktop" : ROOT ? "one system user per person" : "single uid (development)"}`); if (!DESKTOP) sup.watch(); sup.start(); });
 const shutdown = async () => { sup.s.want = false; await sup.stop(); if (DESKTOP) consoles.killAll(); process.exit(0); };

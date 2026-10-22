@@ -11,7 +11,6 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { startRenderService } from "./render-service.mjs";
-import { runChecks } from "./selftest.mjs";
 import { CloudSync, PlainVault } from "./sync/controller.mjs";
 import { APP_NAME } from "./brand.mjs";
 import { checkForUpdate, releasesUrl } from "./update.mjs";
@@ -188,10 +187,10 @@ async function boot() {
   const internal = rand(), nonce = rand(16), renderKey = rand();
   state.render = await startRenderService(renderKey);
   const common = { APP_DISPLAY_NAME: APP_NAME, INTERNAL_KEY: internal, DATA_DIR: dataDir, SEED_DIR: path.join(ROOT, "app-seed"), TOOLS_DIR: path.join(ROOT, "tools") };
-  startChild("agentd", "gateway/agentd.mjs", { ...common, AGENTD_PORT: String(agentdPort), APP_PORT: String(appPort), RENDER_URL: state.render.url, RENDER_KEY: renderKey, MAX_CONSOLE_USERS: "2" });
-  startChild("gateway", "gateway/gateway.mjs", { ...common, PORT: String(gwPort), HOST: "127.0.0.1", GW_DIR: gwDir, AGENTD_URL: `http://127.0.0.1:${agentdPort}`, APP_URL: `http://127.0.0.1:${appPort}`,
+  startChild("hub", "desktop/hub.mjs", { ...common, AGENTD_PORT: String(agentdPort), APP_PORT: String(appPort), RENDER_URL: state.render.url, RENDER_KEY: renderKey, MAX_CONSOLE_USERS: "2",
+    PORT: String(gwPort), HOST: "127.0.0.1", GW_DIR: gwDir, AGENTD_URL: `http://127.0.0.1:${agentdPort}`, APP_URL: `http://127.0.0.1:${appPort}`,
     DESKTOP_NONCE: nonce, DESKTOP_USER: localUser(), DESKTOP_NAME: (() => { try { return os.userInfo().username; } catch { return ""; } })(), COOKIE_SECURE: "0", ALLOWED_HOSTS: "127.0.0.1,localhost",
-    DESKTOP_NO_AUTOLOGIN: smoke ? "1" : "", SESSION_IDLE_H: "87600", SESSION_MAX_H: "87600", REQUIRE_2FA: "0" });
+    DESKTOP_NO_AUTOLOGIN: smoke || process.env.COLLADO_NO_AUTOLOGIN ? "1" : "", SESSION_IDLE_H: "87600", SESSION_MAX_H: "87600", REQUIRE_2FA: "0" });   // gateway + agentd in one process (see hub.mjs)
   const origin = `http://127.0.0.1:${gwPort}`;
   state.urls = { origin, login: `${origin}/_gw/desktop-login?nonce=${nonce}` };
   lockdown(session.defaultSession, new Set([origin, `http://localhost:${gwPort}`]));
@@ -201,6 +200,7 @@ async function boot() {
   await win.loadURL(state.urls.login);
   if (smoke) {
     await sleep(3500); const here = new URL(win.webContents.getURL());
+    const { runChecks } = await import("./selftest.mjs");   // test code is only loaded when testing
     const checks = await runChecks(win, { renderUrl: state.render.url, renderKey, outDir: path.dirname(smoke), lastOpened: () => state.lastOpened, appUrl: `http://127.0.0.1:${appPort}`, dataDir, user: localUser(), tools: path.join(ROOT, "tools") });
     await win.webContents.executeJavaScript(`location.hash = "#/app"; document.getElementById("appframe").contentWindow.location.hash = "#/"; 0`); await sleep(2000);
     fs.writeFileSync(smoke, (await win.webContents.capturePage()).toPNG());   // the dashboard
