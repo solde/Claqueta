@@ -90,6 +90,13 @@ export async function runChecks(win, { renderUrl, renderKey, outDir, lastOpened 
     const { BrowserWindow } = await import("electron"); const winTitle = BrowserWindow.getAllWindows().map((w) => w.getTitle());
     return { ok: r.title === "Claqueta" && r.brand === "Claqueta" && r.aria === "Claqueta" && r.appTitle === "Claqueta" && r.appName === "Claqueta" && /Recorrido por Claqueta/.test(r.tour), ...r, winTitle };
   });
+  await check("claude login status: a fresh workspace is NOT logged in, even when the user is logged in elsewhere on this Mac (own config dir, real HOME)", () => page(`const r = await (await fetch("/_gw/api/agent/login-status")).json(); return { ok: r.logged_in === false, r };`));
+  await check("claude login helper: a link that Claude Code hard-wraps over several rows is read back whole", () => page(String.raw`
+    const U = "https://claude.com/cai/oauth/authorize?code=true&client_id=9d1c250a-e61b-44d9-88ed-5944d1962f5e&response_type=code&redirect_uri=https%3A%2F%2Fplatform.claude.com%2Foauth%2Fcode%2Fcallback&scope=org%3Acreate_api_key+user%3Aprofile+user%3Ainference&code_challenge=u6bEdLRQic--1rC&code_challenge_method=S256&state=boBAe37wXB0lZkrVeKuir0yahCEgTgRwi0gUlPCQnoQ";
+    const NL = String.fromCharCode(10), cols = 120, rows = []; for (let i = 0; i < U.length; i += cols) rows.push(U.slice(i, i + cols));
+    const screen = ["Browser did not open? Use the url below to sign in (c to copy)", ...rows, "", "Paste code here if prompted >"].join(NL);
+    const one = Tutor.unwrapLinks(screen, cols).match(/https:\/\/\S+/)[0], other = Tutor.unwrapLinks("see https://claude.ai/x" + NL + "next line here", 20);
+    return { ok: one === U && other.includes(NL + "next line here"), same: one === U, len: one.length };`));
   await check("Neumorphism skin is on in the shell and in the app frame", () => page(`
     const f = document.getElementById("appframe"), fd = f.contentDocument, sheets = (d) => [...d.styleSheets].some((x) => /neu\\.css/.test(x.href || ""));
     const surf = (d) => getComputedStyle(d.documentElement).getPropertyValue("--nb-radius").trim();

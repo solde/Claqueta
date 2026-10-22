@@ -2,6 +2,7 @@
 // every process of theirs is started with `setpriv` (uid, gid, supplementary groups, no_new_privs) and a clean environment. Without root (development, CI) users
 // share the uid but keep separate HOME directories, so the rest of the logic is the same and testable.
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { signToken } from "./keys.mjs";
@@ -88,7 +89,10 @@ export class Users {
     const home = this.homeOf(u.name);
     if (this.portable) {   // desktop: the person's own PATH (Claude Code lives in ~/.local/bin or an npm prefix), a private HOME, nothing else from the host environment
       const dirs = [path.join(this.shared, "bin"), path.join(home, ".local", "bin"), path.join(home, ".npm-global", "bin"), ...this.extraPath];
-      return { ...baseEnv(), HOME: home, USERPROFILE: home, USER: u.name, LOGNAME: u.name, TERM: "xterm-256color", COLORTERM: "truecolor", LANG: process.env.LANG || "en_US.UTF-8", TZ: process.env.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone,
+      // HOME stays the REAL home: on macOS Claude Code keeps its login in the user's login keychain, which does not exist under a private HOME ("A default keychain could not be found").
+      // Its own files (settings, skills, session, login on other systems) live in the person's workspace through CLAUDE_CONFIG_DIR instead.
+      const real = os.homedir();
+      return { ...baseEnv(), HOME: real, USERPROFILE: real, CLAUDE_CONFIG_DIR: path.join(home, ".claude"), USER: u.name, LOGNAME: u.name, TERM: "xterm-256color", COLORTERM: "truecolor", LANG: process.env.LANG || "en_US.UTF-8", TZ: process.env.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone,
         PATH: searchPath(dirs).join(path.delimiter), NPM_CONFIG_PREFIX: path.join(home, ".npm-global"), NPM_CONFIG_CACHE: path.join(home, ".npm-cache"),
         COLLADO_API: this.apiUrl, COLLADO_CTL: this.ctlUrl, COLLADO_USER: u.name, COLLADO_TOKEN_FILE: path.join(home, ".collado", "token"), COLLADO_SHARED: this.shared, DISABLE_AUTOUPDATER: "1", ...this.sharedClaude, ...extra };
     }

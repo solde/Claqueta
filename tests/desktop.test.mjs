@@ -17,10 +17,10 @@ const req = { headers: { "user-agent": "t" }, socket: { remoteAddress: "127.0.0.
 const mkUsers = (portable = true) => { const d = tmp(); return new Users({ root: false, homes: path.join(d, "homes"), shared: path.join(d, "shared"), state: path.join(d, "state"), apiUrl: "http://127.0.0.1:1", ctlUrl: "http://127.0.0.1:2", tokenKey: "k", portable }); };
 const wait = async (cond, ms = 8000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { if (await cond()) return true; await new Promise((r) => setTimeout(r, 50)); } return false; };
 
-test("portable users: no env/setpriv wrapper, clean environment with the person's PATH, private HOME", () => {
+test("portable users: no env/setpriv wrapper, clean environment with the person's PATH, real HOME, Claude config in the workspace", () => {
   const users = mkUsers(); const u = users.ensure("ana", ["agent.console"]);
   const [cmd, args] = users.wrap(u, ["claude", "-p"]); assert.equal(cmd, "claude"); assert.deepEqual(args, ["-p"]);
-  const env = users.env(u); assert.equal(env.HOME, users.homeOf("ana")); assert.ok(env.PATH.split(path.delimiter)[0].endsWith(path.join("shared", "bin")));
+  const env = users.env(u); assert.equal(env.HOME, os.homedir(), "the REAL home: the macOS keychain (where Claude Code keeps its login) does not exist under a private HOME"); assert.equal(env.CLAUDE_CONFIG_DIR, path.join(users.homeOf("ana"), ".claude"), "Claude's own files stay in the person's workspace"); assert.ok(env.PATH.split(path.delimiter)[0].endsWith(path.join("shared", "bin")));
   assert.ok(!("INTERNAL_KEY" in env) && !("ELECTRON_RUN_AS_NODE" in env)); assert.equal(env.COLLADO_USER, "ana");
   assert.deepEqual(users.spawnEnv(u, { A: "1" }).A, "1"); assert.equal(mkUsers(false).spawnEnv({ name: "x" }), undefined, "the server build keeps using wrap()");
   assert.equal(users.run(u, [process.execPath, "-e", "process.stdout.write(process.env.COLLADO_USER)"]).stdout, "ana");

@@ -17,8 +17,18 @@ const Tutor = (() => {
     for (let i = Math.max(0, b.length - 300); i < b.length; i++) { const l = b.getLine(i); if (!l) continue; const s = l.translateToString(true); if (l.isWrapped && out.length) out[out.length - 1] += s; else out.push(s); }
     return out.join("\n");
   }
+  /** Claude Code's UI hard-wraps a long link into rows of the terminal's width with real line breaks (the terminal does not know they are one line): glue the continuation rows back. */
+  function unwrapLinks(text, cols) {
+    const rows = text.split("\n"), out = [];
+    for (let i = 0; i < rows.length; i++) {
+      let r = rows[i];
+      while (/https?:\/\/\S*$/.test(r) && r.length >= cols - 3 && i + 1 < rows.length && /^\S+$/.test(rows[i + 1].trimEnd())) { r += rows[++i].trimEnd(); }   // full-width row ending in a link, next row has no spaces: it continues it
+      out.push(r);
+    }
+    return out.join("\n");
+  }
   function loginUrl() {
-    const hits = [...termText().matchAll(/https:\/\/[^\s"'<>│║]+/g)].map((m) => m[0]).filter((u) => HOST.test(u));
+    const hits = [...unwrapLinks(termText(), term()?.term?.cols || 80).matchAll(/https:\/\/[^\s"'<>│║]+/g)].map((m) => m[0]).filter((u) => HOST.test(u));
     return hits.length ? hits[hits.length - 1] : null;
   }
   const sawClaude = () => /claude code|welcome|choose the text style|login method|select login/i.test(termText());
@@ -67,7 +77,7 @@ const Tutor = (() => {
       ];
     } },
     { title: "¡Listo!", body: () => [
-      el("p", {}, "Claude Code ya tiene tu sesión. Se queda guardada en tu carpeta personal, no tendrás que repetirlo."),
+      el("p", {}, "Claude Code ya tiene tu sesión. Se queda guardada en este equipo, no tendrás que repetirlo."),
       el("p", {}, "Prueba a preguntarle algo:"),
       el("button", { class: "btn primary", type: "button", onclick: async () => { try { await api("agent/send", "POST", { text: "Hola. Preséntate en dos frases y dime tres cosas que puedes hacer por mí en Collado." }); toast("Enviado al agente"); } catch (e) { toast(e.message); } } }, "Presentarte al agente"),
       el("button", { class: "btn", type: "button", onclick: () => { close(true); Tour.open(); } }, "Recorrido por la plataforma"),
@@ -119,5 +129,5 @@ const Tutor = (() => {
     if (!canConsole() || !has("agent.console")) return;
     try { const r = await api("agent/login-status"); if (r.logged_in === false) open(false); } catch { /* ignore */ }
   }
-  return { open, maybeStart, close, isOpen: () => !!card };
+  return { open, maybeStart, close, isOpen: () => !!card, loginUrl, unwrapLinks };
 })();

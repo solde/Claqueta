@@ -13,8 +13,8 @@ import { internalKeys, safeEqual, verifyToken } from "./lib/agentd/keys.mjs";
 import { Users } from "./lib/agentd/users.mjs";
 import { Consoles } from "./lib/agentd/console.mjs";
 import { PtyConsoles } from "./lib/agentd/ptyconsole.mjs";
-import { installToolLaunchers } from "./lib/agentd/platform.mjs";
-import { spawnSync } from "node:child_process";
+import { installToolLaunchers, which } from "./lib/agentd/platform.mjs";
+import { spawn } from "node:child_process";
 import { Supervisor } from "./lib/agentd/supervisor.mjs";
 import { Jobs } from "./lib/agentd/jobs.mjs";
 import { Files } from "./lib/agentd/files.mjs";
@@ -68,13 +68,21 @@ const userOf = (w, body, url) => (w === "gateway" || w === "app" ? body.user || 
 const has = (w, body, p) => w === "gateway" || (typeof w === "object" && w.perms.includes(p));
 const myConsole = (u) => ({ claude: consoles.hasSession(u, "claude"), shell: consoles.hasSession(u, "shell") });
 const status = (u) => ({ app: sup.status(), console: u ? myConsole(u) : {}, mode: DESKTOP ? "desktop" : ROOT ? "users" : "shared-uid", users: ROOT ? users.list().length : undefined });
-/** Claude Code keeps its login in ~/.claude/.credentials.json, or in the macOS Keychain; only the EXISTENCE of the credentials is checked, never their content. */
-function claudeCredentials(name) {
-  try { if (fs.statSync(path.join(users.homeOf(name), ".claude", ".credentials.json")).size > 0) return true; } catch { /* not in a file */ }
-  if (DESKTOP && process.platform === "darwin") return spawnSync("security", ["find-generic-password", "-s", "Claude Code-credentials"], { stdio: "ignore" }).status === 0;
-  return false;
+/** Is this person logged in to Claude Code? Only the answer of `claude auth status` (or, without it, the EXISTENCE of the credentials file) is used, never the credentials themselves.
+ *  Desktop: the login lives in the keychain (macOS) under a name derived from the person's config dir, so the CLI is the only reliable judge. Cached for a few seconds (the tutorial polls). */
+const loginCache = new Map();
+async function claudeLoggedIn(name) {
+  const u = users.get(name); if (!u) return false;
+  const file = () => { try { return fs.statSync(path.join(users.homeOf(name), ".claude", ".credentials.json")).size > 0; } catch { return false; } };
+  if (!DESKTOP) return file();
+  const hit = loginCache.get(name); if (hit && Date.now() - hit.at < 3000) return hit.ok;
+  const env = users.env(u), bin = which("claude", env.PATH.split(path.delimiter)); let ok = false;
+  if (bin) {
+    ok = await new Promise((res) => { let out = ""; const c = spawn(bin, ["auth", "status"], { env, cwd: path.join(users.homeOf(name), "work"), stdio: ["ignore", "pipe", "ignore"] }); const t = setTimeout(() => { c.kill(); res(file()); }, 10_000);
+      c.stdout.on("data", (d) => { out += d; }); c.on("error", () => { clearTimeout(t); res(file()); }); c.on("close", () => { clearTimeout(t); try { res(!!JSON.parse(out).loggedIn); } catch { res(file()); } }); });
+  }
+  loginCache.set(name, { ok, at: Date.now() }); return ok;
 }
-
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://x");
   try {
@@ -101,7 +109,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "GET" && url.pathname === "/claude-status") {   // is this person logged in to Claude Code? Only the EXISTENCE of the credentials file is checked, never its content
       if (w !== "gateway") return json(res, 403, { error: "forbidden" });
       const name = url.searchParams.get("user"), shared = "CLAUDE_CODE_OAUTH_TOKEN" in sharedClaude || "ANTHROPIC_API_KEY" in sharedClaude;
-      const ok = !!name && !!users.get(name) && claudeCredentials(name);
+      const ok = !!name && await claudeLoggedIn(name);
       return json(res, 200, { logged_in: !!ok, shared });
     }
     if (req.method === "GET" && url.pathname === "/status") { const name = userOf(w, body, url); const u = name && users.get(name); return json(res, 200, status(u)); }
