@@ -138,7 +138,7 @@ ipcMain.handle("collado:cloud-disconnect", async (e) => { if (!trusted(e) || !st
 ipcMain.handle("collado:cloud-sync", async (e) => { if (!trusted(e) || !state.cloud) return { error: "forbidden" }; try { return { ok: true, status: await state.cloud.syncNow() }; } catch (err) { return { ...cloudErr(err), status: state.cloud.status() }; } });
 
 // ---- updates: only when the person asks (menu Ayuda). Looks at the release page of the repository and opens the download in the browser ------------------------------------------------
-const updateConfig = () => { try { return JSON.parse(fs.readFileSync(path.join(ROOT, "desktop", "update.config.json"), "utf8")); } catch { return { host: "https://gitea.solde.cat", repo: "dsoldevila/claqueta" }; } };
+const updateConfig = () => { try { return JSON.parse(fs.readFileSync(path.join(ROOT, "desktop", "update.config.json"), "utf8")); } catch { return { host: "https://gitea.solde.cat", repo: "dsoldevila/claqueta-desktop" }; } };
 async function updateCheck() {
   const cfg = updateConfig(), r = await checkForUpdate({ ...cfg, current: app.getVersion(), platform: process.platform, arch: process.arch }), parent = state.win && !state.win.isDestroyed() ? state.win : undefined;
   const box = (o) => dialog.showMessageBox(parent, { noLink: true, ...o });
