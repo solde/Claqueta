@@ -15,7 +15,7 @@ description: Cumplimiento de la normativa audiovisual y editorial — protecció
 - **Propiedad intelectual**: música, archivo y contenido de terceros con licencia y declarados.
 - **Línea editorial** del programa (`editorial_lines`): valores, límites, estilo, temas sensibles; aprobada por quien corresponda.
 
-## En Collado
+## En Claqueta
 - `collado-api action init-compliance '{"episode_id":N}'` crea la **lista de verificación** del episodio (por áreas). Estados: `pending · ok · review · breach · na`, con revisor, fecha y notas. Los puntos en `review/breach` con emisión próxima generan alerta.
 - **Aprobaciones** (`approvals`): editorial, cadena, legal, financiera o del cliente; con solicitante, aprobador, fecha límite y comentario. Un contenido no se da por entregable hasta que `delivery-readiness` marca aprobaciones concedidas.
 - Los textos de los puntos son **prompts de verificación**, no citas legales; edítalos en Ajustes → Cumplimiento.

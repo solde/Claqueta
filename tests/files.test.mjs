@@ -1,3 +1,4 @@
+// Unit tests of the file manager worker (gateway/lib/agentd/fsops.mjs): create, rename, copy, containment inside the home, trash and restore, search and zip.
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";

@@ -10,7 +10,7 @@ import { remember } from "./forms.js";
 import "./views/extras.js";
 
 const app = $("#app"); let main, side, topbar;
-const EMBEDDED = window.parent !== window;   // inside the Collado shell: it owns the single top bar (search, notifications, language, theme, agent)
+const EMBEDDED = window.parent !== window;   // inside the Claqueta shell: it owns the single top bar (search, notifications, language, theme, agent)
 const external = () => S.me?.external;
 const can = (entity) => !!S.schema.entities[entity];
 
@@ -26,13 +26,15 @@ function navTree() {
     can("sponsorships") && { label: groupLabel("commercial"), items: [e("sponsorships"), e("rate_cards"), e("ad_spots"), e("placements")].filter(Boolean) },
     can("contracts") && { label: groupLabel("legal"), items: [e("contracts"), e("rights"), e("cue_sheets"), e("processing_activities"), e("consents"), e("dsr_requests"), e("retention_policies")].filter(Boolean) },
     { label: groupLabel("content"), items: [e("assets"), e("qc_reports"), e("qc_issues"), e("deliveries"), e("delivery_specs"), e("compliance_checks"), e("editorial_lines")].filter(Boolean) },
-    { label: groupLabel("broadcast"), items: [e("broadcasts"), { id: "ratings", label: t("nav_ratings"), href: "#/ratings", icon: "chart" }, e("targets"), e("competitors")].filter(Boolean) },
+    can("memoirs") && { label: groupLabel("memoirs"), items: [{ id: "memoirs", label: t("nav_memoirs"), href: "#/memoirs", icon: "book" }, can("media_items") && { id: "gallery", label: t("nav_gallery"), href: "#/gallery", icon: "image" }, e("locations")].filter(Boolean) },
+    { label: groupLabel("broadcast"), items: [e("broadcasts"), { id: "ratings", label: t("nav_ratings"), href: "#/ratings", icon: "chart" }, can("ratings") && { id: "forecast", label: t("nav_forecast"), href: "#/forecast", icon: "trend" }, e("targets"), e("competitors")].filter(Boolean) },
     { label: groupLabel("collab"), items: [e("approvals"), e("risks"), e("comments"), { id: "alerts", label: t("nav_alerts"), href: "#/alerts", icon: "alert" }].filter(Boolean) },
     { label: groupLabel("docs"), items: [e("documents"), e("doc_templates"), e("brands"), e("exports")].filter(Boolean) },
     can("jobs") && S.me.perms.some((p) => p === "*" || p === "agent.jobs") && { label: groupLabel("agent"), items: [{ id: "jobs", label: t("nav_agent"), href: "#/agent", icon: "robot" }] },
     { label: groupLabel("settings"), items: [{ id: "settings", label: t("nav_settings"), href: "#/settings", icon: "settings" }, e("workflow_templates"), e("agreements"), e("members")].filter(Boolean) },
   ].filter(Boolean);
 }
+/** The side menu, built from the permissions and the schema. */
 function drawSide() {
   const cur = location.hash || "#/";
   side.replaceChildren(...navTree().map((g) => h("div.side__group", g.label && h("div.side__label", g.label), g.items.map((it) => h("a", { class: ["side__link", (cur === it.href || (it.href !== "#/" && cur.startsWith(it.href + "/")) || (it.href !== "#/" && cur.startsWith(it.href + "?"))) && "active"], href: it.href, onclick: () => document.body.classList.remove("nav-open") }, icon(it.icon), h("span", it.label))))));
@@ -40,6 +42,7 @@ function drawSide() {
 
 // ---- top bar -----------------------------------------------------------------------------------------------------------------------------
 let unread = 0;
+/** The top bar: search, notifications, language and theme. */
 function drawTop() {
   const search = h("input.nb-input.top__search", { type: "search", placeholder: t("search_everything"), "aria-label": t("search"), oninput: onSearch, onfocus: onSearch, autocomplete: "off" });
   const results = h("div.nb-pop.top__results", { hidden: true });
@@ -48,11 +51,14 @@ function drawTop() {
   const bell = btn("", { ico: "bell", kind: "secondary", sm: true, title: t("notifications"), onclick: openNotifications, cls: "bell" });
   const lang = h("div.nb-selectwrap.top__lang", h("select.nb-select", { "aria-label": t("language"), onchange: (e) => setLang(e.target.value) }, Object.entries(LANGS).map(([k, v]) => h("option", { value: k, selected: k === S.lang }, v))));
   const theme = btn("", { ico: "sun", kind: "secondary", sm: true, title: t("theme"), onclick: toggleTheme });
-  topbar.replaceChildren(btn("", { ico: "menu", kind: "secondary", sm: true, cls: "menu-btn", title: t("menu"), onclick: () => document.body.classList.toggle("nav-open") }), h("a.nb-logo", { href: "#/" }, h("span.dot"), "Collado"), h("div.top__searchwrap", search, results), h("span.nb-grow"), h("span.offline", { hidden: true, id: "offline" }, icon("warn"), " ", t("offline")), lang, theme, bell);
+  topbar.replaceChildren(btn("", { ico: "menu", kind: "secondary", sm: true, cls: "menu-btn", title: t("menu"), onclick: () => document.body.classList.toggle("nav-open") }), h("a.nb-logo", { href: "#/" }, h("span.dot"), "Claqueta"), h("div.top__searchwrap", search, results), h("span.nb-grow"), h("span.offline", { hidden: true, id: "offline" }, icon("warn"), " ", t("offline")), lang, theme, bell);
   refreshBell();
 }
+/** Switches light and dark and remembers it. */
 function toggleTheme() { const cur = document.documentElement.dataset.theme; const next = cur === "dark" ? "light" : "dark"; document.documentElement.dataset.theme = next; try { localStorage.setItem("collado.theme", next); } catch { /* ignore */ } }
+/** Updates the unread notifications counter. */
 async function refreshBell() { try { const r = await api.get("api/notifications", { silent: true }); unread = r.unread; const b = $(".bell"); if (b) { b.querySelector(".cnt")?.remove(); if (unread) b.append(h("span.cnt", String(unread))); } window.__notifs = r.rows; } catch { /* offline */ } }
+/** Notifications dialog. */
 async function openNotifications() {
   const r = await api.get("api/notifications", { silent: true }).catch(() => ({ rows: [] }));
   const m = modal({ title: t("notifications"), body: h("div", r.rows.length ? r.rows.map((n) => h("a.notif", { class: n.read ? "" : "unread", href: n.link || "#/", onclick: () => { m.close(); } }, h("b", n.title), n.body && h("div.nb-help", n.body.startsWith("{") ? "" : n.body), h("span.nb-caption", new Date(n.created).toLocaleString(S.lang)))) : emptyState(t("no_notifications"))),
@@ -75,15 +81,21 @@ const ROUTES = [
   [/^#\/finance\/bank/, () => import("./views/finance.js").then((m) => m.bankPage)],
   [/^#\/finance\/profit/, () => import("./views/finance.js").then((m) => m.profitPage)],
   [/^#\/ratings/, () => import("./views/broadcast.js").then((m) => m.ratingsPage)],
+  [/^#\/gallery/, () => import("./views/gallery.js").then((m) => m.galleryPage)],
+  [/^#\/memoirs/, () => import("./views/memoir.js").then((m) => m.memoirsPage)],
+  [/^#\/memoir\/(\d+)/, () => import("./views/memoir.js").then((m) => m.memoirPage)],
+  [/^#\/forecast/, () => import("./views/forecast.js").then((m) => m.forecastPage)],
   [/^#\/alerts/, () => import("./views/dashboard.js").then((m) => m.alertsPage)],
   [/^#\/doc\/(\d+)/, () => import("./views/docs.js").then((m) => m.docEditor)],
   [/^#\/agent/, () => import("./views/docs.js").then((m) => m.agentPage)],
   [/^#\/settings(?:\/(\w+))?/, () => import("./views/settings.js").then((m) => m.settingsPage)],
 ];
+/** The page of an entity's list (used by the `#/e/<entity>` routes). */
 export function entityPage(root, entity) {
   const ent = S.schema.entities[entity]; if (!ent) { root.replaceChildren(emptyState(t("not_found"))); return; }
   root.replaceChildren(h("header.pagehead", h("div", h("h1.nb-h1", icon(ent.icon), " ", entName(entity, true)))), entityList({ entity, openAfterCreate: true }));
 }
+/** Hash router: resolves the route to a view module (loaded on demand) and renders it. */
 async function route() {
   drawSide(); if (EMBEDDED) window.parent.postMessage({ type: "collado:route", hash: location.hash || "#/" }, location.origin); const hash = location.hash || "#/"; const base = hash.split("?")[0];
   for (const [re, loader] of ROUTES) { const m = re.exec(base); if (!m) continue; main.replaceChildren(spinner()); try { const fn = await loader(); const holder = h("div.page"); main.replaceChildren(holder); await fn(holder, m, new URLSearchParams(hash.split("?")[1] || "")); if (!EMBEDDED || document.hasFocus()) main.focus({ preventScroll: true }); window.scrollTo(0, 0); } catch (e) { console.error(e); main.replaceChildren(emptyState(t("load_failed"), btn(t("retry"), { onclick: route }))); } return; }
@@ -96,7 +108,7 @@ async function boot() {
   try {
     await loadI18n();
     [S.me, S.schema] = await Promise.all([api.get("api/me"), api.get("api/schema")]); setOrg(S.me.org);
-  } catch (e) { app.replaceChildren(h("div.boot", h("h2", "Collado"), h("p", "No se pudo cargar la aplicación. / Could not load the app."), btn("Reload", { onclick: () => location.reload() }))); return; }
+  } catch (e) { app.replaceChildren(h("div.boot", h("h2", "Claqueta"), h("p", "No se pudo cargar la aplicación. / Could not load the app."), btn("Reload", { onclick: () => location.reload() }))); return; }
   topbar = h("header.topbar"); side = h("nav.side", { "aria-label": t("navigation") }); main = h("main#main.main", { tabindex: "-1" });
   app.replaceChildren(topbar, side, main, h("div.scrim", { onclick: () => document.body.classList.remove("nav-open") }));
   document.body.classList.toggle("embedded", EMBEDDED);

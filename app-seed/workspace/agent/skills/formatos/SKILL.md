@@ -25,6 +25,6 @@ Radio: reloj de programación (apertura, bloques, tertulia/entrevista, publicida
 
 ## Encargos habituales y cómo resolverlos
 - «Dame 10 títulos/loglines»: agrupa por tono, recomienda uno.
-- «Prepara el dossier para X»: lee la ficha y documentos en Collado, completa huecos con supuestos marcados, genera PDF con marca y portada, previsualiza.
+- «Prepara el dossier para X»: lee la ficha y documentos en Claqueta, completa huecos con supuestos marcados, genera PDF con marca y portada, previsualiza.
 - «Evalúa esta idea»: tabla de viabilidad + 3 riesgos + 3 siguientes pasos.
 Guarda los resultados como documentos del programa (tipos `format`, `bible`, `dossier`).

@@ -45,13 +45,13 @@ const Tutor = (() => {
     ], next: "Empezar" },
     { title: "Mira la consola", on() { setDock(true); selectSession("claude"); }, body: () => [
       el("p", {}, "A la derecha tienes la consola con Claude Code. Si te pregunta por el estilo de texto o los colores, elige el que quieras y pulsa Intro."),
-      keys(kbtn("↑", "\x1b[A"), kbtn("↓", "\x1b[B"), kbtn("Intro ↵", "\r")),
+      keys(kbtn("↑", "\x1b[A"), kbtn("↓", "\x1b[B"), kbtn("Intro", "\r")),
       status(sawClaude(), sawClaude() ? "Claude Code está en marcha" : "Esperando a que arranque Claude Code…"),
     ], auto: () => false },
     { title: "Elige iniciar sesión", body: () => [
       el("p", {}, ["Cuando pregunte cómo quieres iniciar sesión, elige ", el("b", {}, "«Claude account with subscription»"), " (la primera opción) y pulsa Intro."]),
       el("p", {}, "Si esa pantalla ya pasó o no apareció, pulsa este botón para empezar el inicio de sesión:"),
-      keys(kbtn("↑", "\x1b[A"), kbtn("↓", "\x1b[B"), kbtn("Intro ↵", "\r"), el("button", { class: "btn sm primary", type: "button", onclick: () => send("/login\r") }, "Escribir /login")),
+      keys(kbtn("↑", "\x1b[A"), kbtn("↓", "\x1b[B"), kbtn("Intro", "\r"), el("button", { class: "btn sm primary", type: "button", onclick: () => send("/login\r") }, "Escribir /login")),
       status(!!loginUrl(), loginUrl() ? "¡Enlace de inicio de sesión recibido!" : "Esperando el enlace de inicio de sesión…"),
     ], auto: () => !!loginUrl() },
     { title: "Abre el enlace", body: () => {
@@ -59,7 +59,7 @@ const Tutor = (() => {
       return [
         el("p", {}, "Se abrirá una pestaña nueva de Claude. Inicia sesión si hace falta y pulsa ", el("b", {}, "Autorizar"), ". Te mostrará un código: cópialo y vuelve aquí."),
         u ? el("div", { class: "row" },
-          el("a", { class: "btn primary", href: u, target: "_blank", rel: "noopener noreferrer", id: "coach-open" }, "Abrir el enlace ↗"),
+          el("a", { class: "btn primary", href: u, target: "_blank", rel: "noopener noreferrer", id: "coach-open" }, "Abrir el enlace ", ico("external")),
           el("button", { class: "btn sm", type: "button", onclick: async () => { try { await navigator.clipboard.writeText(u); toast("Enlace copiado"); } catch { toast("No se pudo copiar: selecciónalo en el terminal"); } } }, "Copiar enlace"))
           : status(false, "Aún no hay enlace. Vuelve al paso anterior (escribe /login)."),
         el("p", { class: "coach-hint" }, "Consejo: el enlace también se puede pulsar directamente en el terminal."),
@@ -79,7 +79,7 @@ const Tutor = (() => {
     { title: "¡Listo!", body: () => [
       el("p", {}, "Claude Code ya tiene tu sesión. Se queda guardada en este equipo, no tendrás que repetirlo."),
       el("p", {}, "Prueba a preguntarle algo:"),
-      el("button", { class: "btn primary", type: "button", onclick: async () => { try { await api("agent/send", "POST", { text: "Hola. Preséntate en dos frases y dime tres cosas que puedes hacer por mí en Collado." }); toast("Enviado al agente"); } catch (e) { toast(e.message); } } }, "Presentarte al agente"),
+      el("button", { class: "btn primary", type: "button", onclick: async () => { try { await api("agent/send", "POST", { text: "Hola. Preséntate en dos frases y dime tres cosas que puedes hacer por mí en Claqueta." }); toast("Enviado al agente"); } catch (e) { toast(e.message); } } }, "Presentarte al agente"),
       el("button", { class: "btn", type: "button", onclick: () => { close(true); Tour.open(); } }, "Recorrido por la plataforma"),
       el("p", { class: "coach-hint" }, "Puedes repetir este tutorial desde tu menú de usuario."),
     ], final: true },
@@ -130,7 +130,7 @@ const Tutor = (() => {
       if (shownUrl === url) return; shownUrl = url; const inp = el("input", { type: "text", placeholder: "Código (solo si la página te lo muestra)", autocomplete: "off", spellcheck: "false", "aria-label": "Código de autorización" });
       const send = async () => { const v = inp.value.trim(); if (!v) return; try { await api("agent/login/code", "POST", { code: v }); inp.value = ""; toast("Código enviado"); } catch (e) { toast(e.message); } };
       inp.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); send(); } });
-      fallback.hidden = false; fallback.replaceChildren(el("p", { class: "coach-hint" }, "¿No se abrió el navegador?"), el("div", { class: "row" }, el("a", { class: "btn sm primary", href: url, target: "_blank", rel: "noopener noreferrer" }, "Abrir el enlace ↗"),
+      fallback.hidden = false; fallback.replaceChildren(el("p", { class: "coach-hint" }, "¿No se abrió el navegador?"), el("div", { class: "row" }, el("a", { class: "btn sm primary", href: url, target: "_blank", rel: "noopener noreferrer" }, "Abrir el enlace ", ico("external")),
         el("button", { class: "btn sm", type: "button", onclick: async () => { try { await navigator.clipboard.writeText(url); toast("Enlace copiado"); } catch { toast("No se pudo copiar"); } } }, "Copiar enlace")), el("div", { class: "row" }, inp, el("button", { class: "btn sm", type: "button", onclick: send }, "Enviar")));
     };
     const fail = (code) => { clearInterval(autoTimer); autoTimer = null; msg(false, AUTO_ERR[code] || `No se pudo iniciar sesión (${code}).`); auto.querySelector(".coach-nav").prepend(el("button", { class: "btn sm primary", type: "button", onclick: () => { stopAuto(); autoLogin(); } }, "Reintentar")); };

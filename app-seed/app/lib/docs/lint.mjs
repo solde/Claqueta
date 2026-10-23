@@ -2,6 +2,7 @@
 import { buildDocument } from "./render.mjs";
 import { inlineText } from "./markdown.mjs";
 
+/** Checks a document before it goes out: unresolved variables, failing data blocks, leftover [Indicar...] placeholders, skipped heading levels, empty tables, length without an index. */
 export async function lintDocument(ctx, input) {
   const b = await buildDocument(ctx, input); const issues = [];
   for (const w of b.warnings) { const [code, ...rest] = w.split(":"); issues.push({ level: code === "missing_variable" || code === "source_failed" ? "error" : "warn", code, message: rest.join(":") }); }

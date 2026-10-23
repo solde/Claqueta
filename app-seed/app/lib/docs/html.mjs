@@ -4,6 +4,7 @@ import { brandCss, readable } from "./brand.mjs";
 import { inlineText } from "./markdown.mjs";
 
 const URL_OK = /^(https?:|mailto:|tel:|#|\/|data:image\/(png|jpe?g|gif|webp|svg\+xml);base64,)/i;
+/** Inline nodes (bold, italic, code, links, images) to HTML; links and image sources are restricted to safe schemes. */
 export function inl(nodes, env = {}) {
   return (nodes || []).map((n) => {
     switch (n.k) {
@@ -22,6 +23,7 @@ export function inl(nodes, env = {}) {
 }
 const cls = (...a) => a.filter(Boolean).join(" ");
 
+/** Block nodes (headings, lists, tables, callouts, columns, charts, galleries, signatures...) to HTML. */
 export function blocksHtml(blocks, env) {
   return (blocks || []).map((b) => {
     switch (b.t) {
@@ -41,12 +43,23 @@ export function blocksHtml(blocks, env) {
       case "kv": return `<dl class="kv">${b.pairs.map(([k, v]) => `<div><dt>${inl(k, env)}</dt><dd>${inl(v, env)}</dd></div>`).join("")}</dl>`;
       case "signature": return `<div class="signature">${(b.names.length ? b.names : [""]).map((n) => `<div class="sig"><div class="line">${esc(n || str(env.lang, "signature"))}</div></div>`).join("")}</div>${b.place ? `<div class="place">${esc(str(env.lang, "date_place"))}: ${esc(b.place)}</div>` : ""}`;
       case "chart": return `<figure class="chart">${b.svg}${b.caption ? `<figcaption>${esc(b.caption)}</figcaption>` : ""}</figure>`;
+      case "gallery": return galleryHtml(b);
       case "toc": return tocHtml(b, env);
       case "cover": return ""; // rendered once, at the top
       case "figure": return `<figure><img src="${esc(b.src)}" alt="${esc(b.alt)}">${b.caption ? `<figcaption>${esc(b.caption)}</figcaption>` : ""}</figure>`;
       default: return "";
     }
   }).join("\n");
+}
+const figHtml = (it, h, logos) => `<figure class="ph"><img src="${esc(it.src)}" alt="${esc(it.alt)}" style="${logos ? "height:" + h + "mm;width:auto;max-width:100%" : it.w && it.h && (it.w / it.h > 1.7 || it.w / it.h < 0.6) ? "width:100%;height:auto;max-height:" + h * 1.6 + "mm;object-fit:contain" : "height:" + h + "mm;width:100%;object-fit:cover"}">${!logos && (it.caption || it.credit) ? `<figcaption>${esc(it.caption)}${it.credit ? ` <span class="credit">© ${esc(it.credit)}</span>` : ""}</figcaption>` : ""}</figure>`;
+function galleryHtml(b) {
+  const n = b.items.length, intro = b.title ? `<p class="gallery-intro">${esc(b.title)}</p>` : "";
+  if (b.layout === "logos") return `<div class="gallery logos">${b.items.map((it) => figHtml(it, 14, true)).join("")}</div>`;
+  if (b.layout === "hero") return `${intro}<div class="gallery hero">${figHtml(b.items[0], 105)}</div>${b.items.length > 1 ? `<div class="gallery grid3">${b.items.slice(1).map((it) => figHtml(it, 45)).join("")}</div>` : ""}`;
+  if (b.layout === "strip") return `${intro}<div class="gallery strip" style="grid-template-columns:repeat(${Math.min(4, n)},1fr)">${b.items.slice(0, 4).map((it) => figHtml(it, 45)).join("")}</div>`;
+  if (b.layout === "grid") return `${intro}<div class="gallery grid3">${b.items.map((it) => figHtml(it, 50)).join("")}</div>`;
+  const first = n % 2 === 1, rest = first ? b.items.slice(1) : b.items;   // mosaic: a wide lead picture when the count is odd, then pairs
+  return `${intro}${first ? `<div class="gallery hero">${figHtml(b.items[0], 85)}</div>` : ""}<div class="gallery pairs">${rest.map((it) => figHtml(it, 58)).join("")}</div>`;
 }
 function tableHtml(b, env) {
   const th = b.head.map((c, i) => `<th class="${cls(c.cls, c.align)}"${c.colspan > 1 ? ` colspan="${c.colspan}"` : ""}${b.widths?.[i] ? ` style="width:${esc(b.widths[i])}"` : ""}>${inl(c.inlines, env)}</th>`).join("");
@@ -71,6 +84,7 @@ export function collectHeadings(blocks, out = [], counter = { n: 0 }) {
   return out;
 }
 
+/** The cover page markup for a document in the brand's cover style (band, full, minimal, split). */
 export function coverHtml(meta, brand, lang, attrs = {}, extraHtml = "") {
   const variant = attrs.style || (brand.cover === "none" ? "minimal" : brand.cover || "band");
   const rows = [[str(lang, "prepared_for"), meta.client], [str(lang, "author"), meta.author], [str(lang, "date"), meta.date_text], [str(lang, "version"), meta.version]].filter((r) => r[1]);
@@ -97,7 +111,7 @@ export function renderHtml(doc, brand, { lang = "es", forScreen = false, allowRa
   const wm = brand.watermark ? `<div class="watermark">${esc(brand.watermark === "DRAFT" ? str(lang, "draft") : brand.watermark)}</div>` : "";
   const legal = brand.legal_footer ? `<div class="legal-footer">${esc(brand.legal_footer).replace(/\n/g, "<br>")}</div>` : "";
   return `<!doctype html><html lang="${esc(lang)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(meta.title || "")}</title>
-<meta name="author" content="${esc(meta.author || "")}"><meta name="generator" content="Collado"><meta name="description" content="${esc(meta.subtitle || "")}"><style>${brandCss(brand, { lang, meta, forScreen })}</style></head>
+<meta name="author" content="${esc(meta.author || "")}"><meta name="generator" content="Claqueta"><meta name="description" content="${esc(meta.subtitle || "")}"><style>${brandCss(brand, { lang, meta, forScreen })}</style></head>
 <body>${wm}${top}${body}${legal}</body></html>`;
 }
 export { readable };

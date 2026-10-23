@@ -1,4 +1,4 @@
-// Users, roles (RBAC), sessions and audit log of the Collado gateway. Completely independent from the login used by the other homelab portals:
+// Users, roles (RBAC), sessions and audit log of the Claqueta gateway. Completely independent from the login used by the other homelab portals:
 // its own store (GW_DIR/auth.json, mode 0600), its own cookie, its own passwords. Everything the admin does goes through here.
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -28,9 +28,11 @@ export const PLATFORM_PERMS = ["service.manage", "platform.admin"];
 const ALL = Object.keys(PERMISSIONS), ORG_ALL = ALL.filter((p) => !PLATFORM_PERMS.includes(p));
 /** The organization that existed before multi-company support: its data stays where it was (see the app's db.mjs). */
 export const LEGACY_ORG = "principal";
+/** Pattern every organization slug must match. */
 export const ORG_RE = /^[a-z][a-z0-9-]{1,30}$/;
 const VIEW = ["app.view", "fin.view", "legal.view", "people.view"];
 
+/** Built-in roles (admin, ejecutivo, productor, contabilidad, juridico, rrhh, externo, editor, analista, lector) as sets of permissions; `admin` is locked, the rest are copied into each organization and can be edited there. */
 export const DEFAULT_ROLES = {
   admin: { description: "Administrador de la organización: todo lo de la organización (no editable)", permissions: ORG_ALL, locked: true },
   ejecutivo: { description: "Productor ejecutivo: ve todo y aprueba", permissions: [...VIEW, "app.edit", "fin.approve", "agent.jobs", "agent.console"] },
@@ -46,23 +48,27 @@ export const DEFAULT_ROLES = {
 
 const USER_RE = /^[a-z][a-z0-9._-]{1,31}$/;
 const ROLE_RE = /^[a-z][a-z0-9_-]{1,31}$/;
+/** Minimum password length. */
 export const MIN_PASSWORD = 10;
 const SESSION_IDLE_MS = 12 * 3600e3;
 const SESSION_MAX_MS = 7 * 24 * 3600e3;
 
 // ---- TOTP (RFC 6238: HMAC-SHA1, 30 s, 6 digits) -------------------------------------------------------------------------------------------
 const B32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+/** Base32 (RFC 4648) encoding of bytes, for TOTP secrets. */
 export function b32encode(buf) {
   let bits = 0, value = 0, out = "";
   for (const byte of buf) { value = (value << 8) | byte; bits += 8; while (bits >= 5) { out += B32[(value >>> (bits - 5)) & 31]; bits -= 5; } }
   if (bits > 0) out += B32[(value << (5 - bits)) & 31];
   return out;
 }
+/** Base32 decoding (ignores padding and invalid characters). */
 export function b32decode(str) {
   let bits = 0, value = 0; const out = [];
   for (const ch of String(str).toUpperCase().replace(/=+$/, "")) { const i = B32.indexOf(ch); if (i < 0) continue; value = (value << 5) | i; bits += 5; if (bits >= 8) { out.push((value >>> (bits - 8)) & 255); bits -= 8; } }
   return Buffer.from(out);
 }
+/** The 6-digit TOTP code (RFC 6238: HMAC-SHA1, 30 s steps) for a secret at a time-step counter. */
 export function totpCode(secretB32, counter) {
   const msg = Buffer.alloc(8); msg.writeBigUInt64BE(BigInt(counter));
   const h = crypto.createHmac("sha1", b32decode(secretB32)).update(msg).digest(), o = h[h.length - 1] & 15;
@@ -78,6 +84,7 @@ export function verifyTotp(secretB32, code, last = 0, now = Date.now()) {
 const timingEq = (a, b) => a.length === b.length && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
 const sha = (t) => crypto.createHash("sha256").update(t).digest("hex");
 
+/** An authentication/authorisation failure with the HTTP status to answer with. */
 export class AuthError extends Error {
   constructor(status, message) { super(message); this.status = status; }
 }
@@ -92,12 +99,14 @@ const SC = { N: 32768, r: 8, p: 1 };
 const scrypt = (message, salt, { N, r, p }) => new Promise((res, rej) => crypto.scrypt(message, salt, 32, { N, r, p, maxmem: 128 * N * r * 2 }, (e, k) => (e ? rej(e) : res(k))));
 let argonOk = null;   // the function exists in Electron's Node but throws ERR_CRYPTO_ARGON2_NOT_SUPPORTED: probe it once
 const hasArgon2 = async () => (argonOk ??= await new Promise((res) => { try { crypto.argon2("argon2id", { message: "x", nonce: Buffer.alloc(8), memory: 64, passes: 1, parallelism: 1, tagLength: 16 }, (e) => res(!e)); } catch { res(false); } }));
+/** Memory-hard password hash with a random salt: argon2id where Node has it, scrypt in Electron; the algorithm and its parameters are stored in the hash string so both kinds verify. */
 export async function hashPassword(pw) {
   const salt = crypto.randomBytes(16);
   if (!(await hasArgon2())) return `scrypt$${SC.N},${SC.r},${SC.p}$${salt.toString("base64")}$${(await scrypt(pw, salt, SC)).toString("base64")}`;
   const k = await argon2(pw, salt);
   return `argon2id$${A2.memory},${A2.passes},${A2.parallelism}$${salt.toString("base64")}$${k.toString("base64")}`;
 }
+/** Constant-time check of a password against a stored hash of either kind; false for malformed hashes. */
 export async function verifyPassword(pw, stored) {
   const [alg, params, salt, hash] = String(stored || "").split("$");
   if ((alg !== "argon2id" && alg !== "scrypt") || !hash) return false;
@@ -110,11 +119,13 @@ export async function verifyPassword(pw, stored) {
 let dummyHash;
 async function burn(pw) { dummyHash ||= await hashPassword("dummy-password-for-timing"); await verifyPassword(pw, dummyHash); }
 
+/** A random 16-character password from an alphabet without look-alike characters (initial passwords). */
 export function randomPassword() {
   const alphabet = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   const bytes = crypto.randomBytes(16);
   return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join("");
 }
+/** Throws a 400 when the password is too short, too long or contains the user name. */
 export function checkPasswordPolicy(pw, username = "") {
   if (typeof pw !== "string" || pw.length < MIN_PASSWORD) throw new AuthError(400, `La contraseña debe tener al menos ${MIN_PASSWORD} caracteres`);
   if (pw.length > 200) throw new AuthError(400, "Contraseña demasiado larga");
@@ -180,9 +191,11 @@ export class AuthStore {
     fs.renameSync(tmp, this.sessFile);
     this.#stamp();
   }
+  /** Subscribes to store changes made by another process (the CLI) or by sessions being revoked; returns the unsubscribe function. */
   onChange(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
   #emit(ev) { for (const fn of this.listeners) try { fn(ev); } catch { /* listener errors never break auth */ } }
 
+  /** Appends an audit event (who, what, detail) to the log. */
   audit(actor, action, detail = {}) {
     const line = JSON.stringify({ t: new Date().toISOString(), actor, action, ...detail }) + "\n";
     try {
@@ -206,7 +219,9 @@ export class AuthStore {
     return Object.values(this.db.orgs).filter((o) => !o.disabled && (user.super || user.memberships?.[o.slug])).map((o) => ({ slug: o.slug, name: o.name }))
       .sort((a, b) => (a.slug === LEGACY_ORG ? -1 : b.slug === LEGACY_ORG ? 1 : a.name.localeCompare(b.name)));
   }
+  /** Whether a user may work in an organization (it exists, is enabled, and the user is super-admin or a member). */
   canUseOrg(user, slug) { return !!this.db.orgs[slug] && !this.db.orgs[slug].disabled && (!!user.super || !!user.memberships?.[slug]); }
+  /** Role names of a user inside one organization. */
   rolesIn(user, org) { return user.memberships?.[org]?.roles || []; }
   /** Permissions of a person INSIDE an organization (platform permissions only for super-admins, who have everything everywhere). */
   permissionsOf(user, org) {
@@ -215,15 +230,18 @@ export class AuthStore {
     for (const r of this.rolesIn(user, org)) for (const p of this.db.orgs[org]?.roles[r]?.permissions || []) if (p in PERMISSIONS && !PLATFORM_PERMS.includes(p)) set.add(p);
     return [...set].sort();
   }
+  /** The user as the browser may see it (no hash, no secrets): name, roles and permissions in an organization, organizations available, 2FA state. */
   publicUser(u, org = this.accessibleOrgs(u)[0]?.slug) {
     return { username: u.username, name: u.name, super: !!u.super, org: org || null, orgs: this.accessibleOrgs(u), roles: [...(u.super ? ["super-admin"] : []), ...this.rolesIn(u, org)], permissions: org ? this.permissionsOf(u, org) : [],
       memberships: Object.keys(u.memberships || {}), disabled: !!u.disabled, must_change: !!u.must_change, totp: !!u.totp?.confirmed, needs_enroll: this.needsEnroll(u), created: u.created, last_login: u.last_login || null };
   }
+  /** True when 2FA is mandatory and this user has not set it up yet (they can only change the password and enrol). */
   needsEnroll(u) { return this.require2fa && !u.totp?.confirmed; }
   /** Users of one organization (roles = their roles THERE); without `org` every user (CLI). */
   listUsers(org) {
     return Object.values(this.db.users).filter((u) => !org || u.memberships?.[org]).map((u) => ({ ...this.publicUser(u, org), orgs_of: Object.keys(u.memberships || {}) })).sort((a, b) => a.username.localeCompare(b.username));
   }
+  /** Roles of an organization with their permissions, whether they are locked, and how many users hold each one. */
   listRoles(org) {
     const o = this.#org(org);
     return Object.entries(o.roles).map(([name, r]) => ({ name, description: r.description || "", permissions: r.permissions, locked: !!r.locked,
@@ -237,6 +255,7 @@ export class AuthStore {
     return Object.values(this.db.orgs).map((o) => ({ slug: o.slug, name: o.name, disabled: !!o.disabled, created: o.created, users: Object.values(this.db.users).filter((u) => u.memberships?.[o.slug]).length }))
       .sort((a, b) => (a.slug === LEGACY_ORG ? -1 : b.slug === LEGACY_ORG ? 1 : a.name.localeCompare(b.name)));
   }
+  /** Creates an organization (super-admin only) with a copy of the default roles. */
   createOrg(actor, { slug, name }) {
     slug = String(slug || "").toLowerCase().trim(); name = String(name || "").trim().slice(0, 80);
     if (!ORG_RE.test(slug)) throw new AuthError(400, "Identificador no válido (2-31 caracteres: minúsculas, números y guiones; empieza por letra)");
@@ -245,6 +264,7 @@ export class AuthStore {
     this.db.orgs[slug] = { slug, name, created: new Date().toISOString(), roles: structuredClone(DEFAULT_ROLES) };
     this.#save(); this.audit(actor, "org.create", { org: slug, name }); return this.listOrgs().find((o) => o.slug === slug);
   }
+  /** Renames, disables or enables an organization (the original one cannot be disabled). */
   updateOrg(actor, slug, patch) {
     const o = this.#org(slug);
     if (patch.name !== undefined) { const n = String(patch.name).trim().slice(0, 80); if (!n) throw new AuthError(400, "Falta el nombre"); o.name = n; }
@@ -331,8 +351,9 @@ export class AuthStore {
   startEnroll(username) {
     const u = this.db.users[username]; if (u.totp?.confirmed) throw new AuthError(409, "Ya tienes la verificación en dos pasos activada");
     const secret = b32encode(crypto.randomBytes(20)); u.totp = { secret, confirmed: false }; this.#save();
-    return { secret, uri: `otpauth://totp/Collado:${encodeURIComponent(username)}?secret=${secret}&issuer=Collado&algorithm=SHA1&digits=6&period=30` };
+    return { secret, uri: `otpauth://totp/Claqueta:${encodeURIComponent(username)}?secret=${secret}&issuer=Claqueta&algorithm=SHA1&digits=6&period=30` };
   }
+  /** Confirms enrolment with a first valid code and returns the one-time recovery codes. */
   confirmEnroll(username, code) {
     const u = this.db.users[username]; if (!u.totp || u.totp.confirmed) throw new AuthError(409, "Empieza de nuevo la activación");
     const c = verifyTotp(u.totp.secret, code, 0); if (c === null) throw new AuthError(400, "El código no es correcto (comprueba la hora del móvil)");
@@ -340,11 +361,13 @@ export class AuthStore {
     const codes = Array.from({ length: 8 }, () => crypto.randomBytes(5).toString("hex")); u.recovery = codes.map(sha); this.#save();
     this.audit(username, "2fa.enable"); return codes;
   }
+  /** Turns 2FA off for one's own account after checking the password (refused where 2FA is mandatory). */
   async disableOwn2fa(username, password) {
     if (this.require2fa) throw new AuthError(403, "La verificación en dos pasos es obligatoria en este servicio");
     const u = this.db.users[username]; if (!(await verifyPassword(String(password ?? ""), u.hash))) throw new AuthError(403, "La contraseña no es correcta");
     delete u.totp; delete u.recovery; this.#save(); this.audit(username, "2fa.disable");
   }
+  /** Removes another user's 2FA and revokes their sessions (lost phone); when 2FA is mandatory they enrol again at the next login. */
   reset2fa(actor, username) {
     const u = this.db.users[username]; if (!u) throw new AuthError(404, "Usuario no encontrado");
     delete u.totp; delete u.recovery; this.#save(); this.#revokeSessions(username); this.audit(actor, "2fa.reset", { user: username });
@@ -370,6 +393,7 @@ export class AuthStore {
     let org = s?.org; if (!org || !this.canUseOrg(u, org)) { org = this.accessibleOrgs(u)[0]?.slug || null; if (s && s.org !== org) { s.org = org; this.#saveSessions(); } }
     return { user: u, org, perms: new Set(org ? this.permissionsOf(u, org) : []) };
   }
+  /** Changes the organization the session works in (the user must have access to it). */
   switchOrg(token, slug) {
     const u = this.resolve(token); if (!u) throw new AuthError(401, "Sesión no válida");
     if (!this.canUseOrg(u, slug)) throw new AuthError(403, "No tienes acceso a esa organización");
@@ -377,6 +401,7 @@ export class AuthStore {
     this.audit(u.username, "org.switch", { org: slug }); this.#emit({ type: "org", user: u.username });
     return this.db.orgs[slug];
   }
+  /** Destroys a session. */
   logout(token) { if (token && this.sessions.delete(hashToken(token))) this.#saveSessions(); }
   #revokeSessions(username, keepToken) {
     const keep = keepToken ? hashToken(keepToken) : null;
@@ -384,6 +409,7 @@ export class AuthStore {
     this.#saveSessions();
     this.#emit({ type: "revoke", user: username });
   }
+  /** Number of live sessions of a user. */
   sessionsOf(username) { return [...this.sessions.values()].filter((s) => s.user === username).length; }
 
   // ---- mutations (the caller has already checked users.manage, except changeOwnPassword)
@@ -427,6 +453,7 @@ export class AuthStore {
     if (actorSuper) return;
     if (u.super || Object.keys(u.memberships || {}).some((o) => o !== org)) throw new AuthError(403, `${what}: esta persona también pertenece a otras organizaciones; lo gestiona un super-admin`);
   }
+  /** Changes a user: roles within the organization, and (account-wide, so only for people who belong to no other organization or for a super-admin) name, password, disabled state and super-admin status. */
   async updateUser(actor, username, patch, org, { actorSuper = false } = {}) {
     const u = this.db.users[username];
     if (!u || (!u.memberships?.[org] && !actorSuper)) throw new AuthError(404, "Usuario no encontrado");
@@ -475,6 +502,7 @@ export class AuthStore {
     delete this.db.users[username]; this.#save(); this.#revokeSessions(username);
     this.audit(actor, "user.delete", { user: username, org }); return { deleted: true };
   }
+  /** Creates or edits a role in an organization (the `admin` role is locked; platform permissions can never be granted). */
   upsertRole(actor, name, { description = "", permissions = [] }, create, org) {
     const o = this.#org(org);
     if (!ROLE_RE.test(name)) throw new AuthError(400, "Nombre de rol no válido (minúsculas, números, _ -)");
@@ -488,6 +516,7 @@ export class AuthStore {
     this.#emit({ type: "perms" });
     return this.listRoles(org).find((r) => r.name === name);
   }
+  /** Deletes a role that no user holds. */
   deleteRole(actor, name, org) {
     const o = this.#org(org), r = o.roles[name];
     if (!r) throw new AuthError(404, "Rol no encontrado");
@@ -524,6 +553,7 @@ export class AuthStore {
   }
   /** Desktop build: opens a session without a password (the caller has already proven it owns the process, see DESKTOP_NONCE in the gateway). */
   openLocalSession(username, req) { this.#sync(); const u = this.db.users[String(username).toLowerCase()]; if (!u || u.disabled) throw new AuthError(401, "Usuario no válido"); return this.#newSession(u, req); }
+  /** Grants or removes super-admin status (platform administration). */
   setSuper(username, on) {
     const u = this.db.users[String(username).toLowerCase()]; if (!u) throw new AuthError(404, "Usuario no encontrado");
     if (!on && u.super && this.#supers(u.username).length === 0) throw new AuthError(409, "Debe quedar al menos un super-admin activo");
@@ -534,6 +564,7 @@ export class AuthStore {
 
 function hashToken(t) { return crypto.createHash("sha256").update(t).digest("hex"); }
 
+/** Parses a Cookie header into an object. */
 export function parseCookies(header) {
   const out = {};
   for (const part of String(header || "").split(";")) { const i = part.indexOf("="); if (i > 0) out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim()); }

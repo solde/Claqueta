@@ -1,4 +1,4 @@
-// Collado shell: ONE top bar (navigation, global search, notifications, agent, console toggle, user menu), the app in an iframe, a console dock on the right
+// Claqueta shell: ONE top bar (navigation, global search, notifications, agent, console toggle, user menu), the app in an iframe, a console dock on the right
 // (open / close / maximise / resize), the service panel and users + roles administration. No framework, no build step.
 "use strict";
 const $ = (s, r = document) => r.querySelector(s);
@@ -17,6 +17,7 @@ const fmtDate = (s) => (s ? new Date(s).toLocaleString("es-ES", { dateStyle: "sh
 
 let ME = null, CATALOGUE = {};
 
+/** Calls the gateway's API (/_gw/api): JSON in/out, CSRF header; a 401 goes to the login, and a forced password change or 2FA enrolment is completed first and the call repeated. */
 async function api(path, method = "GET", body) {
   const r = await fetch("/_gw/api/" + path, { method, headers: { "content-type": "application/json", "x-requested-with": "collado" }, body: body ? JSON.stringify(body) : undefined });
   const d = await r.json().catch(() => ({}));
@@ -26,6 +27,7 @@ async function api(path, method = "GET", body) {
   if (!r.ok) throw new Error(d.error || `Error ${r.status}`);
   return d;
 }
+/** Short message at the bottom of the screen. */
 function toast(msg) { const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (t.hidden = true), 3500); }
 const has = (p) => ME.user.permissions.includes(p);
 
@@ -45,6 +47,7 @@ const buttons = (...b) => el("div", { class: "row end" }, ...b);
 
 // ---- password change -----------------------------------------------------------------------------------------------------------------
 async function forcePasswordChange() { return passwordDialog(true); }
+/** Change-password dialog (forced after the first login or an admin reset). */
 async function passwordDialog(forced) {
   const err = el("p", { class: "err", role: "alert" });
   const cur = el("input", { type: "password", autocomplete: "current-password", id: "pw0" }), n1 = el("input", { type: "password", autocomplete: "new-password", id: "pw1" }),
@@ -103,12 +106,14 @@ const canView = (v) => ({ app: has("app.view"), files: canConsole(), service: ha
 const canConsole = () => has("agent.console") || has("agent.shell");
 let current = null;
 
+/** Hash router of the shell: picks the view the person may see (app, files, service, admin, orgs). */
 function route() {
   let v = location.hash.replace(/^#\/?/, "").split("/")[0];
   if (v === "console" || v === "split") { v = "app"; if (canConsole()) setDock(true); history.replaceState(null, "", "#/app"); }   // old bookmarks
   if (!VIEWS.includes(v) || !canView(v)) v = VIEWS.find(canView) || "none";
   show(v);
 }
+/** Shows one view's pane, hides the others and starts what that view needs (app frame, file manager, service polling...). */
 function show(v) {
   current = v;
   for (const a of document.querySelectorAll("#tabs a")) a.setAttribute("aria-current", a.dataset.view === v ? "page" : "false");
@@ -121,6 +126,7 @@ function show(v) {
   if (v === "orgs") renderOrgs();
   if (v === "none") { $("#pane-admin").hidden = false; $("#pane-admin").replaceChildren(el("h1", {}, "Sin acceso"), el("p", { class: "lead" }, "Tu cuenta no tiene permisos asignados. Pide a un administrador que te asigne un rol.")); }
 }
+/** Opens the app view and tells the app (in its iframe) to navigate to a hash. */
 function goApp(hash) {
   if (current !== "app") location.hash = "#/app";
   const f = $("#appframe"), send = () => f.contentWindow?.postMessage({ type: "collado:navigate", hash }, location.origin);
@@ -130,6 +136,7 @@ function goApp(hash) {
 // ---- console dock: open / close / maximise / resize (state is remembered) ----------------------------------------------------------------------
 const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } } };
 let dockOpen = false, dockMax = false;
+/** Opens or closes the console dock (the choice is remembered). */
 function setDock(open, { remember = true } = {}) {
   if (open && !canConsole()) return;
   dockOpen = open; if (!open) dockMax = false;
@@ -139,7 +146,9 @@ function setDock(open, { remember = true } = {}) {
   if (remember) store.set("collado.dock", open ? "open" : "closed");
   if (open) { initConsole(); requestAnimationFrame(() => { fitAll(); focusTerm(); }); }
 }
+/** Maximises or restores the console dock. */
 function setDockMax(on) { dockMax = on; setDock(true, { remember: false }); $("#stage").classList.toggle("dock-max", on); requestAnimationFrame(() => { fitAll(); focusTerm(); }); }
+/** Wires the dock: open/close and maximise buttons and the drag splitter. */
 function initDock() {
   if (!canConsole()) return;
   const t = $("#dock-toggle"); t.hidden = false;
@@ -164,6 +173,7 @@ function initDock() {
 const TERMS = {};   // name -> { term, fit, ws, host, veil, retry }
 let activeSession = null;
 const SESSION_LABEL = { claude: "Claude Code", shell: "Terminal bash" };
+/** Builds the console panel once: one tab and terminal per session the person may use (claude, shell) and the special-keys bar for touch keyboards. */
 function initConsole() {
   if (initConsole.done) return; initConsole.done = true;
   const sessions = ["claude", "shell"].filter((s) => has(s === "claude" ? "agent.console" : "agent.shell"));
@@ -183,6 +193,7 @@ function initConsole() {
     el("button", { type: "button", onmousedown: (e) => e.preventDefault(), onclick: () => { const t = TERMS[activeSession]; if (t?.ws?.readyState === 1) t.ws.send(new TextEncoder().encode(seq)); t?.term?.focus(); } }, label))));
   selectSession(sessions[0]);
 }
+/** Switches the active console session and connects it on first use. */
 function selectSession(s) {
   activeSession = s;
   for (const b of document.querySelectorAll("#subtabs button")) b.setAttribute("aria-selected", b.dataset.s === s ? "true" : "false");
@@ -190,15 +201,19 @@ function selectSession(s) {
   if (!TERMS[s].term) connect(s);
   requestAnimationFrame(() => { fitAll(); focusTerm(); });
 }
+/** Gives keyboard focus to the active terminal. */
 function focusTerm() { TERMS[activeSession]?.term?.focus(); }
+/** Resizes every visible terminal to its container (a smaller font on narrow screens). */
 function fitAll() {
   for (const t of Object.values(TERMS)) if (t.term && !t.host.hidden && t.host.offsetParent) {
     const fs = t.host.clientWidth < 420 ? 12 : 14; if (t.term.options.fontSize !== fs) t.term.options.fontSize = fs;   // narrow dock / phone: keep enough columns for Claude Code's UI
     try { t.fit.fit(); } catch { /* not laid out yet */ }
   }
 }
+/** Shows or hides the overlay over a terminal (connecting, disconnected, error) with a message. */
 function setVeil(t, msg, show) { t.veilShown = show; t.veil.hidden = !show || t.host.hidden; t.veil.firstChild.textContent = msg || ""; }
 
+/** Opens a terminal and its WebSocket to the person's session; reconnects with back-off and replays the scrollback on attach. */
 function connect(s) {
   const t = TERMS[s];
   if (!t.term) {
@@ -253,6 +268,7 @@ addEventListener("message", async (e) => {
 
 // Desktop: a project lives in a folder chosen by the person. The file manager reaches it through a link inside the person's home (Proyectos/<name>-<id>), created on demand.
 const projectLinkName = (p) => `${String(p.name || "proyecto").replace(/[\\/:*?"<>|\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim().replace(/^\.+/, "").slice(0, 60) || "proyecto"}-${p.id}`;
+/** Desktop: exposes a project's local folder inside the file manager and opens it there. */
 async function openProjectFolder(p) {
   try {
     const r = await api("files/link", "POST", { name: projectLinkName(p), target: p.folder });
@@ -263,6 +279,7 @@ async function openProjectFolder(p) {
 // ---- cloud sync (desktop): Google Drive, OneDrive or a synced folder ---------------------------------------------------------------------------------------------
 const CLOUD_ERR = { weak_passphrase: "La contraseña debe tener al menos 8 caracteres", bad_passphrase: "Esa contraseña no corresponde a los datos que ya hay en la nube", no_client_id: "Falta el identificador de la aplicación (Client ID)", bad_folder: "Elige una carpeta (ruta completa)", cancelled: "Cancelado",
   access_denied: "No se concedió el acceso a la cuenta", timeout: "Se agotó el tiempo esperando el inicio de sesión", already_connected: "Ya hay una nube conectada", forbidden: "No permitido" };
+/** Desktop: the cloud sync dialog (connect Google Drive, OneDrive or a synced folder; status, sync now, disconnect). */
 async function cloudDialog() {
   const bridge = window.colladoDesktop?.cloud; if (!bridge) { toast("La sincronización solo está en la app de escritorio"); return; }
   const body = el("div"), when = (t) => (t ? fmtDate(t) : "nunca"), STATE = { off: "Sin conectar", idle: "Sincronizado", syncing: "Sincronizando…", offline: "Sin conexión: se sincronizará al volver", error: "Error", suspended: "En pausa (otro equipo tiene el control)", connecting: "Conectando…" };
@@ -306,7 +323,9 @@ async function cloudDialog() {
 
 // ---- service panel ---------------------------------------------------------------------------------------------------------------------
 let servicePoll = null;
+/** Stops the periodic refresh of the Log view. */
 function stopServicePoll() { clearInterval(servicePoll); servicePoll = null; }
+/** The Log/Service view: app state, log and the restart/rollback actions the person may use. */
 async function renderService() {
   const pane = $("#pane-service");
   const logbox = el("pre", { class: "logbox", "aria-label": "Registro de la app", tabindex: "0" }), info = el("dl", { class: "kv" });
@@ -338,6 +357,7 @@ let adminTab = "users", adminOrg = null;   // adminOrg: organization a super-adm
 const curOrg = () => ME.org?.slug || null;
 /** Admin API call for the organization being administered (?org= is only honoured for super-admins). */
 const aApi = (path, method, body) => api(adminOrg && adminOrg !== curOrg() ? path + (path.includes("?") ? "&" : "?") + "org=" + encodeURIComponent(adminOrg) : path, method, body);
+/** The administration view: users, roles and audit (and the organization selector for super-admins). */
 async function renderAdmin() {
   const pane = $("#pane-admin");
   let orgSel = "";
@@ -357,12 +377,14 @@ async function renderAdmin() {
 const adminOrgName = () => (ME.user.orgs.find((o) => o.slug === (adminOrg || curOrg())) || {}).name || ME.org?.name || "";
 const roleChips = (roles) => roles.map((r) => el("span", { class: "chip" + (r === "admin" ? " admin" : "") }, r));
 
+/** Shows a generated secret (an initial password or recovery codes) once, with a copy button. */
 async function secretDialog(title, intro, secret) {
   const copy = el("button", { class: "btn", type: "button", onclick: async () => { try { await navigator.clipboard.writeText(secret); toast("Copiada"); } catch { toast("Selecciónala y cópiala a mano"); } } }, "Copiar");
   await modal(title, el("div", {}, el("p", {}, intro), el("div", { class: "secret" }, secret), el("p", { class: "lead" }, "Se muestra una sola vez. La persona deberá cambiarla al entrar."),
     buttons(copy, el("button", { class: "btn primary", onclick: () => modal.close(true) }, "Hecho"))));
 }
 
+/** Users table with create, edit roles, reset password, disable and delete. */
 async function adminUsers(body) {
   const [{ users }, { roles }] = await Promise.all([aApi("users"), aApi("roles")]); const sup = has("platform.admin");
   const table = el("table", {}, el("thead", {}, el("tr", {}, ...["Usuario", "Roles", ...(sup ? ["Organizaciones"] : []), "Estado", "2FA", "Último acceso", ""].map((h) => el("th", {}, h)))),
@@ -388,10 +410,12 @@ async function adminUsers(body) {
           try { await aApi("users/" + encodeURIComponent(u.username) + "?everywhere=1", "DELETE"); renderAdmin(); } catch (e) { toast(e.message); } } }, "Borrar en todas")] : "")))));
   body.replaceChildren(el("div", { class: "row", style: "margin:16px 0" }, el("button", { class: "btn primary", onclick: () => newUser(roles, sup) }, "Nuevo usuario")), el("div", { style: "overflow-x:auto" }, table));
 }
+/** Checkboxes of roles with the selected ones ticked. */
 function roleCheckboxes(roles, selected) {
   return roles.map((r) => { const id = "rc-" + r.name;
     return el("label", { class: "perm", for: id }, el("input", { type: "checkbox", id, value: r.name, checked: selected.includes(r.name) }), el("span", {}, el("strong", {}, r.name), " — " + (r.description || r.permissions.join(", ")))); });
 }
+/** Dialog to create a user. */
 async function newUser(roles, sup) {
   const err = el("p", { class: "err", role: "alert" }), u = el("input", { type: "text", id: "nu", autocomplete: "off", autocapitalize: "none", spellcheck: "false" }),
     n = el("input", { type: "text", id: "nn", autocomplete: "off" }), p = el("input", { type: "password", id: "np", autocomplete: "new-password", placeholder: "Vacío = generar una temporal" });
@@ -409,6 +433,7 @@ async function newUser(roles, sup) {
   });
   await modal("Nuevo usuario", form);
 }
+/** Dialog to change a user's roles. */
 async function editUserRoles(u, roles) {
   const err = el("p", { class: "err", role: "alert" }), boxes = el("div", {}, roleCheckboxes(roles, u.roles));
   const form = el("form", {}, boxes, err, buttons(el("button", { class: "btn", type: "button", onclick: () => modal.close(null) }, "Cancelar"), el("button", { class: "btn primary", type: "submit" }, "Guardar")));
@@ -420,6 +445,7 @@ async function editUserRoles(u, roles) {
   await modal(`Roles de ${u.username}`, form);
 }
 
+/** Roles table with create, edit and delete. */
 async function adminRoles(body) {
   const { roles, permissions } = await aApi("roles");
   const cards = roles.map((r) => el("div", { class: "card" }, el("h3", {}, r.name, r.locked ? el("span", { class: "chip", style: "margin-left:8px" }, "fijo") : ""),
@@ -430,6 +456,7 @@ async function adminRoles(body) {
         try { await aApi("roles/" + encodeURIComponent(r.name), "DELETE"); renderAdmin(); } catch (e) { toast(e.message); } } }, "Borrar"))));
   body.replaceChildren(el("div", { class: "row", style: "margin:16px 0" }, el("button", { class: "btn primary", onclick: () => roleDialog(null, permissions) }, "Nuevo rol")), el("div", { class: "cards" }, cards));
 }
+/** Dialog to edit a role's description and permissions. */
 async function roleDialog(role, permissions) {
   const err = el("p", { class: "err", role: "alert" }), name = el("input", { type: "text", id: "rn", value: role?.name || "", disabled: !!role, autocapitalize: "none", spellcheck: "false" }),
     desc = el("input", { type: "text", id: "rd", value: role?.description || "" });
@@ -447,6 +474,7 @@ async function roleDialog(role, permissions) {
   });
   await modal(role ? `Editar rol ${role.name}` : "Nuevo rol", form);
 }
+/** Audit log view. */
 async function adminAudit(body) {
   const { events } = await aApi("audit?n=300");
   body.replaceChildren(el("div", { style: "overflow-x:auto;margin-top:16px" }, el("table", {}, el("thead", {}, el("tr", {}, ...["Fecha", "Quién", "Acción", "Detalle"].map((h) => el("th", {}, h)))),
@@ -459,19 +487,21 @@ async function switchOrg(slug) {
   if (slug === curOrg()) return;
   try { await api("me/org", "POST", { org: slug }); location.hash = "#/app"; location.reload(); } catch (e) { toast(e.message); }
 }
+/** Organization selector in the top bar (only when the person has several, or is super-admin). */
 function initOrgSwitch() {
   const b = $("#org-btn"), pop = $("#orgpop"), orgs = ME.user.orgs || [];
   if (!orgs.length || (orgs.length < 2 && !has("platform.admin"))) return;   // one company and no platform role: nothing to switch
   const close = () => { pop.hidden = true; b.setAttribute("aria-expanded", "false"); };
-  b.hidden = false; b.textContent = (ME.org?.name || "Organización").slice(0, 22) + " ▾";
+  b.hidden = false; b.replaceChildren((ME.org?.name || "Organización").slice(0, 22), " ", ico("down"));
   b.addEventListener("click", () => {
     const open = pop.hidden; pop.hidden = !open; b.setAttribute("aria-expanded", String(open)); if (!open) return;
     pop.style.right = Math.max(8, innerWidth - b.getBoundingClientRect().right) + "px";
-    pop.replaceChildren(el("div", { class: "who" }, "Cambiar de organización"), ...(ME.user.orgs || []).map((o) => el("button", { type: "button", onclick: () => { close(); switchOrg(o.slug); } }, (o.slug === curOrg() ? "✓ " : "") + o.name)),
-      has("platform.admin") ? [el("div", { class: "sep" }), el("button", { type: "button", onclick: () => { close(); location.hash = "#/orgs"; } }, "Gestionar organizaciones…")] : "");
+    pop.replaceChildren(el("div", { class: "who" }, "Cambiar de organización"), ...(ME.user.orgs || []).map((o) => el("button", { type: "button", onclick: () => { close(); switchOrg(o.slug); } }, o.slug === curOrg() && ico("ok"), (o.slug === curOrg() ? " " : "") + o.name)),
+      ...(has("platform.admin") ? [el("div", { class: "sep" }), el("button", { type: "button", onclick: () => { close(); location.hash = "#/orgs"; } }, "Gestionar organizaciones…")] : []));
   });
   document.addEventListener("click", (e) => { if (!pop.contains(e.target) && e.target !== b) close(); });
 }
+/** Organizations view (super-admin). */
 async function renderOrgs() {
   const pane = $("#pane-orgs"); let list;
   try { list = (await api("orgs")).orgs; } catch (e) { pane.replaceChildren(el("h1", {}, "Organizaciones"), el("p", { class: "err" }, e.message)); return; }
@@ -486,6 +516,7 @@ async function renderOrgs() {
     el("div", { class: "row", style: "margin:16px 0" }, el("button", { class: "btn primary", onclick: newOrg }, "Nueva organización")),
     el("div", { style: "overflow-x:auto" }, el("table", {}, el("thead", {}, el("tr", {}, ...(ME.desktop ? ["Organización", "Estado", ""] : ["Organización", "Usuarios", "Estado", ""]).map((h) => el("th", {}, h)))), el("tbody", {}, rows))));
 }
+/** Dialog to create an organization. */
 async function newOrg() {
   const err = el("p", { class: "err", role: "alert" }), name = el("input", { type: "text", id: "on", autocomplete: "off" }), slug = el("input", { type: "text", id: "os", autocomplete: "off", autocapitalize: "none", spellcheck: "false" }),
     au = el("input", { type: "text", id: "oau", autocomplete: "off", autocapitalize: "none", spellcheck: "false" }), an = el("input", { type: "text", id: "oan", autocomplete: "off" });
@@ -511,13 +542,16 @@ async function newOrg() {
 const appFetch = (path, opts) => fetch("/app/api/" + path, { credentials: "same-origin", headers: { "x-requested-with": "collado", "content-type": "application/json" }, ...opts }).then(async (r) => { const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || r.status); return d; });
 let DICT = null;
 const entityName = (e) => { const v = DICT?.e?.[e] || e; return v.split("|")[0]; };
+/** Loads the app's dictionary for the shell's own texts. */
 async function loadDict() { try { DICT = await appFetch("i18n/" + (store.get("collado.lang") || (navigator.language || "es").slice(0, 2))); } catch { DICT = null; } }
+/** Global search box: queries the app and opens the chosen row in the app view. */
 function initSearch() {
   if (!has("app.view")) return; const wrap = $("#gsearch-wrap"), inp = $("#gsearch"), res = $("#gresults"); wrap.hidden = false; let timer;
   inp.addEventListener("input", () => { clearTimeout(timer); const q = inp.value.trim(); if (q.length < 2) { res.hidden = true; return; }
     timer = setTimeout(async () => { try { if (!DICT) await loadDict(); const r = await appFetch("search?q=" + encodeURIComponent(q)); res.replaceChildren(...(r.results.length ? r.results.slice(0, 14).map((x) => el("button", { type: "button", onclick: () => { res.hidden = true; inp.value = ""; goApp(`#/e/${x.entity}/${x.id}`); } }, el("span", {}, x.label), el("span", { class: "kind" }, entityName(x.entity)))) : [el("div", { class: "who" }, "Sin resultados")])); res.hidden = false; } catch { res.hidden = true; } }, 220); });
   document.addEventListener("click", (e) => { if (!wrap.contains(e.target)) res.hidden = true; });
 }
+/** Notifications bell and its counter. */
 function initBell() {
   if (!has("app.view")) return; const b = $("#bell"), cnt = $("#bellcnt"); b.hidden = false;
   const refresh = async () => { try { const r = await appFetch("notifications"); cnt.hidden = !r.unread; cnt.textContent = String(r.unread); return r; } catch { return null; } };
@@ -527,18 +561,21 @@ function initBell() {
     modal("Notificaciones", list); });
   refresh(); setInterval(refresh, 60000);
 }
+/** The "ask the agent" bar of the web build (the desktop build has none). */
 function initAsk() {
   if (!has("agent.console")) return; const b = $("#ask"); b.hidden = false;
   b.addEventListener("click", async () => {
     const ta = el("textarea", { rows: "5", "aria-label": "Qué necesitas", placeholder: "Escribe lo que necesitas…" }); const err = el("p", { class: "err", role: "alert" });
-    const send = el("button", { class: "btn primary", onclick: async () => { if (!ta.value.trim()) return; try { await api("agent/send", "POST", { text: `${ta.value.trim()}\n\n(Contexto: estoy viendo ${appHash} en Collado)` }); modal.close(true); setDock(true); toast("Enviado al agente"); } catch (e) { err.textContent = e.message; } } }, "Enviar");
+    const send = el("button", { class: "btn primary", onclick: async () => { if (!ta.value.trim()) return; try { await api("agent/send", "POST", { text: `${ta.value.trim()}\n\n(Contexto: estoy viendo ${appHash} en Claqueta)` }); modal.close(true); setDock(true); toast("Enviado al agente"); } catch (e) { err.textContent = e.message; } } }, "Enviar");
     modal("Preguntar al agente", el("div", {}, el("p", { class: "lead" }, "Se escribe en tu consola de Claude Code junto con la pantalla en la que estás."), ta, err, buttons(el("button", { class: "btn", onclick: () => modal.close(null) }, "Cancelar"), send)));
   });
 }
+/** Applies light or dark to the shell and tells the app frame. */
 function applyTheme(t, notify = true) {
   document.documentElement.dataset.theme = t; store.set("collado-theme", t); store.set("collado.theme", t);
   if (notify) $("#appframe").contentWindow?.postMessage({ type: "collado:theme", theme: t }, location.origin);
 }
+/** Button that opens the app's side menu on small screens. */
 function initNavBtn() {
   const b = $("#navbtn"); if (!has("app.view")) return; b.hidden = false;
   b.addEventListener("click", () => { if (current !== "app") location.hash = "#/app"; $("#appframe").contentWindow?.postMessage({ type: "collado:toggle-nav" }, location.origin); });
@@ -548,19 +585,20 @@ function initNavBtn() {
 async function boot() {
   ME = await api("me"); CATALOGUE = ME.catalogue;
   const nav = $("#tabs");
-  for (const a of nav.querySelectorAll("a")) { const spec = a.dataset.perm; const ok = spec.includes("&") ? spec.split("&").every(has) : spec.split("|").some(has); if (!ok || (ME.desktop && a.dataset.view === "admin")) a.remove(); if (ME.desktop && a.dataset.view === "service") a.textContent = "Log"; }
+  for (const a of nav.querySelectorAll("a")) { const spec = a.dataset.perm; const ok = spec.includes("&") ? spec.split("&").every(has) : spec.split("|").some(has); if (!ok || (ME.desktop && (a.dataset.view === "admin" || a.dataset.view === "service"))) a.remove(); }   // desktop: Log lives in the settings menu
   nav.hidden = false;
   const menu = $("#menu"), pop = $("#menupop");
-  menu.textContent = ME.desktop ? "⚙ Configuración" : (ME.user.name || ME.user.username); menu.hidden = false;   // desktop: one person with every permission, so no name: the menu is just the settings
+  if (ME.desktop) menu.replaceChildren(ico("settings"), " Configuración"); else menu.textContent = ME.user.name || ME.user.username; menu.hidden = false;   // desktop: one person with every permission, so no name: the menu is just the settings
   const closePop = () => { pop.hidden = true; menu.setAttribute("aria-expanded", "false"); };
   menu.addEventListener("click", () => { const open = pop.hidden; pop.hidden = !open; menu.setAttribute("aria-expanded", String(open)); });
   document.addEventListener("click", (e) => { if (!pop.contains(e.target) && e.target !== menu) closePop(); });
   const lang = store.get("collado.lang") || (navigator.language || "es").slice(0, 2);
   const setLang = (l) => { store.set("collado.lang", l); closePop(); DICT = null; $("#appframe").contentWindow?.location.reload(); };
   pop.replaceChildren(...[ME.desktop ? false : el("div", { class: "who" }, `${ME.user.username} · ${ME.user.roles.join(", ") || "sin roles"}${ME.org ? " · " + ME.org.name : ""}`),
-    has("app.view") ? el("div", {}, el("div", { class: "sub" }, "Idioma de la app"), ...[["es", "Castellano"], ["ca", "Català"], ["en", "English"]].map(([k, v]) => el("button", { onclick: () => setLang(k) }, (lang.startsWith(k) ? "✓ " : "") + v)), el("div", { class: "sep" })) : "",
+    has("app.view") ? el("div", {}, el("div", { class: "sub" }, "Idioma de la app"), ...[["es", "Castellano"], ["ca", "Català"], ["en", "English"]].map(([k, v]) => el("button", { onclick: () => setLang(k) }, lang.startsWith(k) && ico("ok"), (lang.startsWith(k) ? " " : "") + v)), el("div", { class: "sep" })) : "",
     el("button", { onclick: () => { closePop(); applyTheme(document.documentElement.dataset.theme === "dark" || (!document.documentElement.dataset.theme && matchMedia("(prefers-color-scheme: dark)").matches) ? "light" : "dark"); } }, "Cambiar tema claro/oscuro"),
-    el("button", { onclick: () => { closePop(); Tour.open(); } }, "Recorrido por la plataforma"),
+    el("button", { onclick: () => { closePop(); Tour.open(); } }, ME.desktop ? "Ayuda: recorrido por la plataforma" : "Recorrido por la plataforma"),
+    ME.desktop && has("service.manage") ? el("button", { onclick: () => { closePop(); location.hash = "#/service"; } }, "Log") : false,
     ME.desktop && window.colladoDesktop?.cloud ? el("button", { onclick: () => { closePop(); cloudDialog(); } }, "Nube y sincronización…") : false,
     has("agent.console") ? el("button", { onclick: () => { closePop(); Tutor.open(true); } }, (ME.desktop ? "Iniciar sesión en Claude Code" : "Tutorial: iniciar sesión en Claude Code")) : false,
     ME.desktop ? false : el("button", { onclick: () => { closePop(); passwordDialog(false); } }, "Cambiar contraseña"),
@@ -570,8 +608,8 @@ async function boot() {
   if (ME.user.must_change) await forcePasswordChange();
   if (ME.user.needs_enroll) await enrollDialog(true);
   addEventListener("hashchange", route); route();
-  $("#tour-btn").hidden = false; $("#tour-btn").addEventListener("click", () => Tour.isOpen() ? Tour.close(true) : Tour.open());
-  initOrgSwitch(); initDock(); initSearch(); initBell(); initAsk(); initNavBtn(); loadDict(); Tutor.maybeStart();
+  if (!ME.desktop) { $("#tour-btn").hidden = false; } $("#tour-btn").addEventListener("click", () => Tour.isOpen() ? Tour.close(true) : Tour.open());
+  initOrgSwitch(); initDock(); initSearch(); initBell(); if (!ME.desktop) initAsk(); initNavBtn(); loadDict(); Tutor.maybeStart();
   const led = $("#led"), txt = $("#ledtxt");
   const poll = async () => {
     try {
@@ -579,6 +617,6 @@ async function boot() {
       led.hidden = false; led.className = "led " + (a.healthy ? "ok" : a.state === "down" || a.state === "crashed" ? "bad" : ""); txt.textContent = a.healthy ? "App en marcha" : `App: ${a.state}`;
     } catch { led.hidden = true; }
   };
-  poll(); setInterval(poll, 10000);
+  if (!ME.desktop) { poll(); setInterval(poll, 10000); }   // desktop: no "app running" indicator (and one timer less)
 }
 boot().catch((e) => { document.body.append(el("pre", { style: "padding:16px;color:var(--bad)" }, "No se pudo iniciar la interfaz: " + e.message)); });

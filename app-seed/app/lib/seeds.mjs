@@ -67,6 +67,7 @@ const SPECS = [
     delivery_method: "Hosting + RSS", notes: "Plantilla orientativa.", list: [["Etiquetas ID3 y arte de portada 3000x3000", "meta"], ["Sonoridad y pico real correctos", "audio"], ["Descripción, capítulos y notas del episodio", "meta"], ["Música y samples con licencia", "legal"], ["Consentimiento de invitados", "legal"]] },
 ];
 
+/** First-run seed data of an organization: workflow templates, collective agreement, delivery specs, GDPR records, default settings, document templates and brands. Idempotent (each block runs once). */
 export async function seedAll() {
   const ctx = localCtx("sistema");
   await once("workflows", async () => {
@@ -101,6 +102,7 @@ export async function seedAll() {
   });
   try { const { seedDocs, recolourBuiltinBrands } = await import("./docs/seed.mjs"); await once("docs-v1", () => seedDocs(ctx)); await once("brands-rec-v1", () => recolourBuiltinBrands(ctx)); } catch (e) { if (e.code !== "ERR_MODULE_NOT_FOUND") log("seed docs failed:", e.message); }
 }
+/** Runs a seed block only if its marker is not in the meta table, then records it. */
 async function once(key, fn) {
   if (getMeta(`seed:${key}`)) return;
   await fn(); setMeta(`seed:${key}`, new Date().toISOString()); log("seeded", key);

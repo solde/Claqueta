@@ -1,3 +1,4 @@
+// Unit tests of the gateway login store (gateway/lib/auth.mjs): login, roles and permissions, throttling, super-admin and multi-organization rules, password policy, persistence and TOTP 2FA.
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";

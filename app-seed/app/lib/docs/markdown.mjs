@@ -1,4 +1,4 @@
-// Collado Markdown -> AST. CommonMark-ish subset + GFM tables/task lists + directives:
+// Claqueta Markdown -> AST. CommonMark-ish subset + GFM tables/task lists + directives:
 //   :::name key=value key="two words"   ...content...   :::        (callout, box, columns, cover, toc, data, chart, signature, kv, landscape, portrait, pagebreak)
 //   ---col---   splits a `columns` block;  \pagebreak  or  :::pagebreak:::  forces a page break;  {#id .class key=val} after a heading/image sets attributes.
 export function parseAttrs(s) {
@@ -7,6 +7,7 @@ export function parseAttrs(s) {
   return out;
 }
 const FM = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
+/** Splits the optional `---` metadata header (title, subtitle, cover, client...) from the Markdown body. */
 export function frontMatter(src) {
   const m = FM.exec(src); if (!m) return { meta: {}, body: src };
   const meta = {}; for (const line of m[1].split(/\r?\n/)) { const k = line.match(/^([\w-]+):\s*(.*)$/); if (k) meta[k[1]] = k[2].replace(/^["']|["']$/g, ""); }
@@ -46,6 +47,7 @@ const isTableSep = (l) => /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.te
 const splitRow = (l) => { let t = l.trim(); if (t.startsWith("|")) t = t.slice(1); if (t.endsWith("|") && !t.endsWith("\\|")) t = t.slice(0, -1); const cells = []; let cur = ""; for (let i = 0; i < t.length; i++) { if (t[i] === "\\" && t[i + 1] === "|") { cur += "|"; i++; } else if (t[i] === "|") { cells.push(cur); cur = ""; } else cur += t[i]; } cells.push(cur); return cells.map((x) => x.trim()); };
 const BLOCK_START = /^(\s{0,3}(#{1,6}\s|>|```|~~~|[-*+]\s|\d+[.)]\s|:::|\\pagebreak|---+\s*$|\*\*\*+\s*$))/;
 
+/** Collado Markdown to block nodes: headings, lists (with tasks), quotes, code, tables, and the `:::name` directives (callout, box, columns, cover, toc, data, chart, graphic, gallery, kv, signature, landscape, pagebreak, raw). */
 export function parseBlocks(src, depth = 0) {
   const lines = String(src).replace(/\r\n?/g, "\n").split("\n"); const blocks = []; let i = 0;
   const para = [];
@@ -107,6 +109,8 @@ function directive(name, attrs, body, depth) {
     case "toc": return { t: "toc", depth: Number(attrs.depth) || 2, title: typeof attrs.title === "string" ? attrs.title : null };
     case "data": return { t: "data", attrs };
     case "chart": return { t: "chart", attrs };
+    case "graphic": return { t: "graphic", attrs, body: body.trim() };
+    case "gallery": return { t: "gallery", attrs, body: body.trim() };
     case "signature": return { t: "signature", names: String(attrs.names || "").split("|").map((x) => x.trim()).filter(Boolean), place: attrs.place || "" };
     case "kv": { const pairs = body.split("\n").map((l) => l.match(/^\s*([^:]+):\s*(.*)$/)).filter(Boolean).map((m) => [parseInline(m[1].trim()), parseInline(m[2].trim())]); return { t: "kv", pairs }; }
     case "landscape": case "portrait": return { t: "section", orientation: name, blocks: parseBlocks(body, depth + 1) };
@@ -115,5 +119,7 @@ function directive(name, attrs, body, depth) {
     default: return { t: "box", color: "plain", blocks: parseBlocks(body, depth + 1) };
   }
 }
+/** Parses a whole document into { meta, blocks }. */
 export function parseDocument(src) { const { meta, body } = frontMatter(String(src ?? "")); return { meta, blocks: parseBlocks(body) }; }
+/** Plain text of inline nodes (for the index, lint and image alt text). */
 export const inlineText = (inl) => (inl || []).map((n) => (n.k === "text" || n.k === "code" ? n.v : n.k === "br" ? " " : n.k === "img" ? n.alt : n.c ? inlineText(n.c) : "")).join("");

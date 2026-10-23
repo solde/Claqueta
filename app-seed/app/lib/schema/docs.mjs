@@ -1,6 +1,7 @@
 // Documents, brands (visual identity), document templates, generated files, agent jobs, app users.
 import { f, req } from "./dsl.mjs";
 
+/** Document types (format, bible, rundown, script, dossier, audience study, contract, report...) used by documents and templates. */
 export const DOC_TYPES = ["format", "bible", "rundown", "script", "dossier", "audience", "target", "competitor", "production", "marketing", "report", "contract", "callsheet", "budget", "delivery", "minutes", "other"];
 
 export default {
@@ -11,7 +12,7 @@ export default {
     fields: {
       program_id: f.ref("programs", { cascade: true }), episode_id: f.ref("episodes"), title: req(f.text()),
       type: f.enm(DOC_TYPES, { default: "other" }), status: f.enm(["draft", "review", "approved", "final"]), language: f.enm(["es", "ca", "en"]),
-      content: f.long({ max: 600000, help: "Markdown with Collado directives" }), template_id: f.ref("doc_templates"), brand_id: f.ref("brands"),
+      content: f.long({ max: 600000, help: "Markdown with Claqueta directives" }), template_id: f.ref("doc_templates"), brand_id: f.ref("brands"),
       vars: f.json({ help: "values for the template variables" }), options: f.json({ help: "layout overrides (page size, cover, toc...)" }),
       tags: f.tags(), shared: f.bool({ help: "visible to external members of the programme" }), version: f.int({ default: 1, ro: true }),
     },

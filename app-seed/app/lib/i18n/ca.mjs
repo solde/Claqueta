@@ -1,4 +1,4 @@
-// Català.
+// Catalan labels: entities, groups, fields and option values (see es.mjs for the structure; ui.ca.mjs has the interface texts).
 export default {
   e: {
     partners: "Entitat|Entitats", workflow_templates: "Plantilla de flux|Plantilles de flux", programs: "Programa|Programes", seasons: "Temporada|Temporades", episodes: "Episodi|Episodis",
@@ -13,9 +13,10 @@ export default {
     qc_reports: "Informe de QC|Control de qualitat", qc_issues: "Incidència|Incidències", deliveries: "Lliurament|Lliuraments", editorial_lines: "Línia editorial|Línies editorials", compliance_checks: "Verificació normativa|Compliment normatiu",
     broadcasts: "Emissió|Graella i emissions", ratings: "Dada d'audiència|Audiències", targets: "Target|Targets", competitors: "Competidor|Competència", documents: "Document|Documents", doc_versions: "Versió|Versions",
     brands: "Marca|Marques i identitat", doc_templates: "Plantilla de document|Plantilles de document", exports: "Exportació|Exportacions", jobs: "Generació|Generacions de l'agent",
+    media_items: "Imatge|Galeria d'imatges", locations: "Localització|Localitzacions", memoirs: "Memòria|Memòries de projecte", memoir_sections: "Secció de memòria|Seccions de memòria",
   },
   g: { directory: "Directori", settings: "Ajustos", programs: "Programes", planning: "Planificació", collab: "Col·laboració", reports: "Informes", finance: "Finances", commercial: "Comercial", legal: "Contractes i drets",
-    gdpr: "RGPD", content: "Material", quality: "Qualitat i lliurament", broadcast: "Emissió", audience: "Audiències", docs: "Documents", agent: "Agent" },
+    gdpr: "RGPD", content: "Material", quality: "Qualitat i lliurament", broadcast: "Emissió", audience: "Audiències", docs: "Documents", agent: "Agent", memoirs: "Memòries" },
   f: {
     accent: "Color d'accent", accepted_at: "Acceptat el", account: "Compte comptable", action: "Acció", active: "Actiu", actual_end: "Final real", actual_start: "Inici real", address: "Adreça", age_range: "Franja d'edat",
     agent_contact: "Contacte del representant", agent_name: "Representant", air_date: "Emissió", air_start: "Inici d'emissió", amount: "Import", apply_by: "Sol·licitar abans de", approved: "Aprovat",
@@ -63,6 +64,7 @@ export default {
     true_peak: "Pic real", type: "Tipus", unit: "Unitat", unit_cost: "Cost unitari", updated: "Modificat", updated_by: "Modificat per", uri: "Ruta o enllaç", usage: "Ús", user: "Usuari", username: "Usuari",
     valid_from: "Vàlida des de", valid_to: "Vàlida fins a", value: "Valor", variables: "Variables", vars: "Valors", vat: "IVA", vat_id: "NIF/CIF", vat_rate: "IVA (%)", version: "Versió", video_codec: "Còdec de vídeo",
     watermark: "Marca d'aigua", web: "Web", window_end: "Fi de finestra", window_start: "Inici de finestra",
+    phase: "Fase", caption: "Peu de foto", alt_text: "Text alternatiu", credit: "Autoria", shot_date: "Data de la presa", people: "Persones que apareixen", rights: "Drets d'ús", rights_note: "Nota de drets", featured: "Destacada", width: "Amplada (px)", height: "Alçada (px)", origin: "Origen", spec: "Especificació del gràfic", lat: "Latitud", lng: "Longitud", date_from: "Des de", date_to: "Fins a", shoot_days: "Dies de rodatge", permit: "Permís", contact: "Contacte", period_start: "Inici del període", period_end: "Fi del període", funder: "Destinatari o finançador", funder_ref: "Referència de l'expedient", audience_note: "Qui la llegeix", tone: "To", brief: "Instruccions", built_at: "Generada el", fields: "Camps estructurats", media_ids: "Imatges", visuals: "Gràfics", agent_brief: "Encàrrec a l'agent", cover_media_id: "Imatge de portada", location_id: "Localització",
   },
   fe: {
     "grants.body": "Organisme", "comments.body": "Comentari", "editorial_lines.body": "Text", "doc_templates.body": "Contingut de la plantilla", "doc_templates.name": "Nom", "episodes.number": "Núm.",
@@ -106,6 +108,7 @@ export default {
     terminated: "Rescindit", theme: "Sintonia", todo: "Pendent", transfer: "Transferència", travel: "Viatges i dietes", tv: "Televisió", unavailable: "No disponible", url: "Enllaç", validated: "Validat", vehicle: "Vehicle",
     vi: "VI · Visual instrumental", vital_interest: "Interès vital", voice: "Veu", void: "Anul·lada", vv: "VV · Visual vocal", wontfix: "No es corregirà", working: "En treball",
     paused: "En pausa", payroll: "Nòmina", en: "Anglès", es: "Castellà", ca: "Català", A3: "A3", A4: "A4", Letter: "Carta", Legal: "Legal (EUA)",
+    photo: "Fotografia", behind_scenes: "Darrere les càmeres", screenshot: "Captura de pantalla", press: "Premsa", document: "Document", preproduction: "Preproducció", promotion: "Promoció", owned: "Pròpia", licensed: "Amb llicència", release_pending: "Autorització pendent", upload: "Pujada", agent: "Agent", generated: "Generada", exterior: "Exterior", interior: "Interior", remote: "Remota", subsidy: "Justificació de subvenció", annual: "Memòria anual", season_close: "Tancament de temporada", writing: "En redacció", empty: "Buida", skipped: "Omesa", institutional: "Institucional", narrative: "Narratiu",
   },
   oe: {
     "status.active": "Actiu", "status.planned": "Planificat", "billing_plan.status.planned": "Prevista", "broadcasts.status.planned": "Prevista", "episodes.status.script": "Guió", "episodes.status.qc": "Control de qualitat",

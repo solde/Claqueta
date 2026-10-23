@@ -8,6 +8,7 @@ import { log, now } from "./util.mjs";
 const OLD = ["projects", "documents", "document_versions", "tasks", "personas", "competitors", "episodes", "jobs"];
 const has = (t) => !!q.get("SELECT 1 AS x FROM sqlite_master WHERE type = 'table' AND name = ?", t);
 
+/** Renames the first version's tables to v1_* before the new schema is created (they share names); they are kept as a backup. */
 export function renameV1Tables() {
   if (getMeta("v1_renamed") || !has("projects") || has("programs")) return false;
   // the v1 `projects` table is the marker: the new schema has no such table
@@ -22,6 +23,7 @@ const ESTATUS = { idea: "planned", escaleta: "script", guion: "script", rodado: 
 const DTYPE = { formato: "format", escaleta: "rundown", guion: "script", dossier: "dossier", audiencia: "audience", target: "target", competencia: "competitor", produccion: "production", marketing: "marketing", otro: "other" };
 const PRIO = { baja: "low", media: "medium", alta: "high" };
 
+/** One-time conversion of the v1 data (projects, documents, tasks...) into the programme model. */
 export async function migrateV1() {
   if (getMeta("v1_migrated") || !has("v1_projects")) return;
   const ctx = localCtx("migracion"), map = new Map();

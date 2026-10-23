@@ -11,11 +11,13 @@ import { GoogleDriveProvider, GOOGLE } from "./providers/google.mjs";
 import { OneDriveProvider, MICROSOFT } from "./providers/microsoft.mjs";
 
 const PROVIDERS = { google: "Google Drive", microsoft: "OneDrive", folder: "Carpeta sincronizada" };
+/** How often the lease is renewed while the app runs (5 min) and how often changes are pushed (15 min). */
 export const LEASE_RENEW_MS = 5 * 60e3, PUSH_EVERY_MS = 15 * 60e3;
 
 /** Where secrets rest. The desktop host passes Electron's safeStorage (OS keychain); without one the file is only readable by its owner. */
 export class PlainVault { seal(s) { return Buffer.from(s, "utf8"); } open(b) { return b.toString("utf8"); } get strong() { return false; } }
 
+/** Orchestrates cloud sync for the desktop app: connect/disconnect, the decision at start-up (pull, conflicts, the lease), periodic pushes while it runs, and the final push on exit. Free of Electron: the host injects the vault, the browser opener and the dialogs. */
 export class CloudSync {
   /** paths: { userData, dataDir, gwDir, localUser } · defaults: { google:{clientId,clientSecret}, microsoft:{clientId} } · io: { vault, openUrl(url), confirm(message, buttons)->index, relaunch(), busy(text) } */
   constructor({ paths, defaults = {}, io, log = () => {}, fetchImpl = fetch, endpoints = {}, appName = "Collado" }) {
@@ -29,6 +31,7 @@ export class CloudSync {
   #readJson(f) { try { return JSON.parse(fs.readFileSync(f, "utf8")); } catch { return null; } }
   #readSecrets() { try { return JSON.parse(this.io.vault.open(fs.readFileSync(this.secretFile))); } catch { return {}; } }
   #save() { fs.mkdirSync(this.paths.userData, { recursive: true }); fs.writeFileSync(this.cfgFile, JSON.stringify(this.cfg, null, 2), { mode: 0o600 }); fs.writeFileSync(this.secretFile, this.io.vault.seal(JSON.stringify(this.secrets)), { mode: 0o600 }); }
+  /** True when a provider and the encryption key are configured. */
   get connected() { return !!this.cfg.provider && !!this.secrets.master; }
 
   /** What the UI shows. No secret ever leaves this object. */
@@ -95,6 +98,7 @@ export class CloudSync {
       this.startTimers(); this.syncNow().catch(() => {}); return this.status();
     } catch (e) { this.cfg = saved.cfg; this.secrets = saved.secrets; this.run.state = this.cfg.provider ? "idle" : "off"; throw e; }
   }
+  /** Releases the lease, forgets the local sync state and the stored secrets; the cloud copy stays. */
   async disconnect() {
     this.stopTimers(); try { await this.engine?.releaseLease(); } catch { /* offline: the lease expires by itself */ }
     this.engine?.forget(); this.cfg = {}; this.secrets = {}; this.engine = this.provider = null; this.suspended = false; this.forcePush = false;
@@ -118,11 +122,13 @@ export class CloudSync {
     } catch (e) { this.#fail(e); if (e.code === "lease_held" || e.code === "remote_newer") this.suspended = true; throw e; }
     finally { this.busy = false; this.run.progress = null; }
   }
+  /** Starts the periodic lease renewal and the periodic push of changes. */
   startTimers() {
     this.stopTimers();
     this.timers.push(setInterval(async () => { if (this.busy || this.suspended || !this.engine) return; try { await this.engine.renewLease(); this.run.offline = false; if (this.run.state === "offline") this.run.state = "idle"; } catch (e) { this.#fail(e); if (e.code === "lease_held") this.suspended = true; } }, LEASE_RENEW_MS).unref?.());
     this.timers.push(setInterval(async () => { if (this.busy || this.suspended || !this.engine) return; try { if ((await this.engine.localChanges()).dirty) await this.syncNow(); } catch { /* status already set */ } }, PUSH_EVERY_MS).unref?.());
   }
+  /** Stops the periodic timers. */
   stopTimers() { for (const t of this.timers) clearInterval(t); this.timers = []; }
 
   // ---- start-up and shutdown -------------------------------------------------------------------------------------------------------------------------------

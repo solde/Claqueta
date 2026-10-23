@@ -18,7 +18,7 @@ description: Contratos con equipo, talento, invitados, proveedores y cadenas; ce
 | Licencia de formato / música / archivo | Licenciante, ámbito (medio, territorio, idiomas, **ventana** de fechas), exclusividad, nº de pases, tarifa, restricciones, créditos. |
 | NDA | Definición de información, plazo, excepciones, devolución/destrucción. |
 
-## En Collado
+## En Claqueta
 - `contracts`: tipo, parte, programa/episodio, fechas, **días de preaviso** (genera alerta de vencimiento), valor (visible solo con `fin.view`), exclusividad, territorio, datos personales/menores. Sube el PDF firmado como **archivo adjunto** (se guarda cifrado).
 - Plantillas de partida: `contract-image` (cesión de imagen), `contract-services` (prestación de servicios), `minor-authorisation` (menores). Genera con `collado-doc new --template contract-services --program N --var provider="…" …` y revisa; **todas llevan el aviso de revisión jurídica**.
 - `rights`: tipo (formato, música, archivo, imagen de talento…), titular, medio (tv/radio/online/todos), **territorio**, **ventana** (`window_start/end` o perpetuo), exclusividad, nº de pases, restricciones. `collado-api report rights-check episode=N` comprueba, para la fecha de emisión, si cada derecho está vigente y si hay música sin derecho asociado.

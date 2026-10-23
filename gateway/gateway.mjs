@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Collado gateway: the ONLY thing exposed to the network (via the private Traefik). Own login + RBAC, serves the shell (tabs, admin screens),
+// Claqueta gateway, the front door: the ONLY thing exposed to the network (via the private Traefik; on the desktop only to this computer). Own login + RBAC, serves the shell (tabs, admin screens),
 // proxies /app/* to the editable app and /_gw/ws/term to the Claude Code console, both of which live in the other container (agentd).
 // Users/sessions are in GW_DIR, a volume the workbench container does not mount.
 import http from "node:http";
@@ -23,11 +23,16 @@ const APP = new URL(env.APP_URL || "http://127.0.0.1:3000");
 const SECURE = env.COOKIE_SECURE !== "0";
 const COOKIE = SECURE ? "__Host-collado" : "collado";
 const STATIC = env.STATIC_DIR || path.join(HERE, "static");
+/** Host header values the gateway answers to (empty = any, for development); anything else gets 421. */
 const ALLOWED_HOSTS = (env.ALLOWED_HOSTS || "").split(",").map((h) => h.trim().toLowerCase()).filter(Boolean);   // empty = any Host (dev)
 const auth = new AuthStore(GW_DIR, { trustProxy: env.TRUST_PROXY === "1", require2fa: env.REQUIRE_2FA === "1",
   sessionIdleMs: Number(env.SESSION_IDLE_H || 12) * 3600e3, sessionMaxMs: Number(env.SESSION_MAX_H || 168) * 3600e3 });
 const KEYS = internalKeys(env.INTERNAL_KEY);   // shared with agentd; the app only gets a derived key
 if (!KEYS && env.REQUIRE_INTERNAL_KEY === "1") { console.error("INTERNAL_KEY is required"); process.exit(1); }
+// Former host names (the app was renamed): any request for them is sent permanently to the first ALLOWED_HOSTS entry, same path and query.
+const LEGACY_HOSTS = (env.LEGACY_HOSTS || "").split(",").map((h) => h.trim().toLowerCase()).filter(Boolean);
+const hostName = (req) => String(req.headers.host || "").toLowerCase().replace(/:\d+$/, "");
+/** Whether the request's Host header is allowed. */
 const hostOk = (req) => !ALLOWED_HOSTS.length || ALLOWED_HOSTS.includes(String(req.headers.host || "").toLowerCase().replace(/:\d+$/, ""));
 
 // ---- CLI (run with kubectl exec; prints nothing secret to the logs, the password goes to a 0600 file or stdout of the exec session) ---------
@@ -72,16 +77,23 @@ const baseHeaders = { "x-robots-tag": "noindex, nofollow", "x-content-type-optio
   "permissions-policy": "camera=(), geolocation=(), microphone=(self), clipboard-write=(self)" };
 if (SECURE) baseHeaders["strict-transport-security"] = "max-age=31536000";
 
+/** Writes a response with the gateway's security headers. */
 const send = (res, code, body, headers = {}) => { res.writeHead(code, { ...baseHeaders, ...headers }); res.end(body); };
+/** Writes a JSON response (never cached). */
 const sendJson = (res, code, obj) => send(res, code, JSON.stringify(obj), { "content-type": "application/json", "cache-control": "no-store" });
+/** Reads a small JSON body (default 100 KB limit). */
 const readJson = (req, max = 100e3) => new Promise((resolve, reject) => {
   let b = ""; req.on("data", (c) => { b += c; if (b.length > max) { reject(new AuthError(413, "Cuerpo demasiado grande")); req.destroy(); } });
   req.on("end", () => { try { resolve(b ? JSON.parse(b) : {}); } catch { reject(new AuthError(400, "JSON no válido")); } });
 });
+/** The session cookie of a request. */
 const sessionToken = (req) => parseCookies(req.headers.cookie)[COOKIE];
+/** CSRF guard: a request that carries an Origin must come from this host. */
 const sameOrigin = (req) => { const o = req.headers.origin; if (!o) return true; try { return new URL(o).host === req.headers.host; } catch { return false; } };
+/** Builds the session cookie (HttpOnly, SameSite=Strict, Secure on HTTPS). */
 const setCookie = (token, maxAge) => `${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Strict${SECURE ? "; Secure" : ""}; Max-Age=${maxAge}`;
 
+/** Serves a file of the shell's static folder with its CSP, refusing paths outside it. */
 function serveStatic(res, rel, csp = SHELL_CSP, req = null) {
   const file = path.normalize(path.join(STATIC, rel));
   if (!file.startsWith(STATIC + path.sep) || !fs.existsSync(file) || !fs.statSync(file).isFile()) return send(res, 404, "not found", { "content-type": "text/plain" });
@@ -102,8 +114,10 @@ function ctx(req) {
 }
 /** Audit entry tagged with the organization it happened in. */
 const aud = (c, action, detail = {}) => auth.audit(c.user.username, action, { org: c.org, ...detail });
+/** Throws 403 unless the session holds the permission. */
 const need = (c, perm) => { if (!c.perms.has(perm)) throw new AuthError(403, "No tienes permiso para esto"); };
 
+/** Calls agentd's control API with the gateway key. */
 async function agentd(method, p, body) {
   const r = await fetch(new URL(p, AGENTD), { method, headers: { ...(body ? { "content-type": "application/json" } : {}), ...(KEYS ? { "x-collado-key": KEYS.gateway } : {}) }, body: body ? JSON.stringify(body) : undefined,
     signal: AbortSignal.timeout(20000) });
@@ -117,7 +131,9 @@ async function agentd(method, p, body) {
 const INLINE = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp", ".pdf": "application/pdf",
   ".mp3": "audio/mpeg", ".wav": "audio/wav", ".ogg": "audio/ogg", ".m4a": "audio/mp4", ".mp4": "video/mp4", ".webm": "video/webm", ".mov": "video/quicktime" };
 const TEXTLIKE = new Set([".txt", ".md", ".json", ".csv", ".log", ".yaml", ".yml", ".js", ".mjs", ".ts", ".css", ".py", ".sh", ".xml", ".ini", ".toml", ".sql", ".tsv", ".ics", ".html", ".htm", ".svg"]);
+/** Content-Disposition value with an ASCII fallback and the UTF-8 name. */
 const attach = (name, disp = "attachment") => `${disp}; filename="${name.replace(/[^\x20-\x7e]|["\\]/g, "_")}"; filename*=UTF-8''${encodeURIComponent(name)}`;
+/** Forwards a file-manager request to agentd adding the person and permissions. */
 function filesProxy(req, res, me, c, op, query, hdr) {
   const q = new URLSearchParams(query); q.set("user", me.username); q.set("perms", [...c.perms].join(","));
   const ureq = http.request(new URL(`/files/${op}?${q}`, AGENTD), { method: req.method === "PUT" ? "POST" : req.method, headers: { ...(KEYS ? { "x-collado-key": KEYS.gateway } : {}), ...(hdr || {}) } }, (ures) => {
@@ -129,6 +145,7 @@ function filesProxy(req, res, me, c, op, query, hdr) {
   res.on("close", () => ureq.destroy());
   return ureq;
 }
+/** The file manager's API (`/_gw/api/files/*`): permission and CSRF checks, auditing and the translation to agentd operations. */
 async function filesApi(req, res, url, me, c, p, m) {
   if (!c.perms.has("agent.console") && !c.perms.has("agent.shell")) throw new AuthError(403, "No tienes permiso para esto");
   const op = p.slice("files/".length), rel = url.searchParams.get("path") || "";
@@ -289,6 +306,7 @@ function identityHeaders(c) {
   return { "x-collado-user": c.user.username, "x-collado-name": encodeURIComponent(c.user.name || c.user.username), "x-collado-perms": [...c.perms].join(","),
     "x-collado-roles": auth.publicUser(c.user, c.org).roles.join(","), "x-collado-org": c.org, "x-collado-org-name": encodeURIComponent(c.orgName), "x-forwarded-prefix": "/app", ...(KEYS ? { "x-collado-key": KEYS.app } : {}) };
 }
+/** Headers for the app: the caller's identity, permissions, roles, organization and the internal key, with any client-supplied x-collado-* header removed. */
 function cleanHeaders(req, c) {
   if (!c.org) throw new AuthError(403, "Tu cuenta no tiene ninguna organización activa");   // never let a request reach the app without a company: it would fall back to the legacy one
   const h = { ...req.headers };
@@ -299,8 +317,10 @@ function cleanHeaders(req, c) {
   delete h["content-security-policy"];
   return { ...h, ...identityHeaders(c) };
 }
+/** "/app/x?y" to "/x?y" (the path the app sees). */
 const appPath = (url) => url.pathname.slice(4) + url.search || "/";   // "/app/x?y" -> "/x?y"
 
+/** Reverse proxy to the app, with identity headers, body streaming and a friendly page while the app is starting. */
 async function proxyApp(req, res, url, c) {
   const read = req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS";
   // writes need app.edit, or the external-access permission (the app then limits externals to comments, approvals and their own tasks)
@@ -321,7 +341,9 @@ async function proxyApp(req, res, url, c) {
   });
   req.pipe(up);
 }
+/** HTML-escapes a string for the "app unavailable" page. */
 const esc = (s) => String(s).replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]);
+/** Page shown while the app is down (with the recent log for administrators). */
 function unavailablePage(logs, admin) {
   return `<!doctype html><meta charset=utf-8><meta http-equiv=refresh content=4><meta name=viewport content="width=device-width,initial-scale=1"><title>App no disponible</title>
 <style>body{font:16px system-ui;margin:0;padding:32px 16px;background:#14161a;color:#e8e6e1}main{max-width:720px;margin:auto}h1{font-size:20px}code,pre{font:13px ui-monospace,monospace}
@@ -335,6 +357,7 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://x");
   try {
     if (url.pathname === "/healthz") return sendJson(res, 200, { ok: true });
+    if (LEGACY_HOSTS.includes(hostName(req)) && ALLOWED_HOSTS[0]) return send(res, 301, "", { location: `https://${ALLOWED_HOSTS[0]}${req.url}` });
     if (!hostOk(req)) return send(res, 421, "misdirected request", { "content-type": "text/plain" });
     // behind the public Traefik the plain-HTTP entrypoint reaches us too (it only serves the ACME challenge itself): never serve the app or the login in clear
     if (env.TRUST_PROXY === "1" && String(req.headers["x-forwarded-proto"] || "").split(",").pop().trim() === "http")
@@ -411,6 +434,7 @@ server.on("upgrade", (req, socket, head) => {
   deny(404, "Not Found");
 });
 
+/** Bridges a browser WebSocket to agentd's terminal socket for a console session. */
 function bridgeTerminal(ws, c, session, perm, url) {
   const target = new URL(`/term?session=${session}&cols=${+url.searchParams.get("cols") || 120}&rows=${+url.searchParams.get("rows") || 32}&user=${encodeURIComponent(c.user.username)}&perms=${encodeURIComponent([...c.perms].join(","))}&org=${encodeURIComponent(c.org || "")}`, AGENTD);
   target.protocol = "ws:";

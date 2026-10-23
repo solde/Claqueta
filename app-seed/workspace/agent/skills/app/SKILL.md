@@ -1,8 +1,8 @@
 ---
 name: collado-app
-description: Cómo leer y escribir datos de Collado (programas, temporadas, episodios, escaletas, tareas, hitos, presupuestos, gastos, facturas, contratos, derechos, material, QC, entregas, emisiones, audiencias, comentarios, aprobaciones…) con collado-api; filtros, informes, acciones, permisos y recetas. Úsala siempre que tengas que consultar o modificar datos de la app.
+description: Cómo leer y escribir datos de Claqueta (programas, temporadas, episodios, escaletas, tareas, hitos, presupuestos, gastos, facturas, contratos, derechos, material, QC, entregas, emisiones, audiencias, comentarios, aprobaciones…) con collado-api; filtros, informes, acciones, permisos y recetas. Úsala siempre que tengas que consultar o modificar datos de la app.
 ---
-# Trabajar con los datos de Collado (`collado-api`)
+# Trabajar con los datos de Claqueta (`collado-api`)
 
 Actúas con **los permisos de tu persona** (token en el fichero que indica `COLLADO_TOKEN_FILE`, normalmente `~/.collado/token` de tu espacio de trabajo; caduca a las 24 h: si da 401, hay que reabrir la consola). Ejecuta `collado-api` sin argumentos para ver la ayuda.
 

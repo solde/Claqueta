@@ -7,6 +7,7 @@ import { ENTITIES, rowLabel } from "./schema.mjs";
 import { forbidden, bad, today, addDays, addMonths, diffDays, mondayOf, quarterOf, dtMin, hhmmToMin, minToHhmm, fromCents, round2 } from "./util.mjs";
 import { decField } from "./crypto.mjs";
 import { CHAPTERS } from "./schema/finance.mjs";
+import { forecastMeasure } from "./forecast.mjs";
 
 const E = (c) => (c == null ? 0 : Math.round(c) / 100);
 const need = (ctx, perm) => { if (!has(ctx, perm)) throw forbidden(`needs:${perm}`); };
@@ -142,6 +143,7 @@ export function profitability(ctx, { program } = {}) {
 
 // ---- resources: conflicts -------------------------------------------------------------------------------------------------------------
 const evtLabel = (e) => e;
+/** Double bookings of resources and people, and people assigned while unavailable, between two dates. */
 export function conflicts(ctx, { from, to, program } = {}) {
   const f = (from || today()).slice(0, 10), t = (to || addDays(f, 60)).slice(0, 10);
   const out = [];
@@ -212,6 +214,7 @@ export function rundownTiming(ctx, { episode_id }) {
 }
 const clock = (sec) => { const s = ((sec % 86400) + 86400) % 86400; return `${String(Math.floor(s / 3600)).padStart(2, "0")}:${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`; };
 
+/** Milestones of a programme with their dependencies, the critical path and which ones start before their predecessors end. */
 export function gantt(ctx, { program_id, season_id }) {
   const rows = q.all(`SELECT * FROM milestones WHERE program_id = ? ${season_id ? "AND season_id = ?" : ""} ORDER BY start_date, id`, ...[Number(program_id), ...(season_id ? [Number(season_id)] : [])]);
   const byId = new Map(rows.map((r) => [r.id, { ...r, deps: safeArr(r.depends_on), end: r.end_date || r.start_date }]));
@@ -242,6 +245,28 @@ export function ratingsSummary(ctx, { program_id, season_id }) {
     seasons: Object.entries(bySeason).map(([id, a]) => ({ season_id: Number(id) || null, share: avg(a.map((r) => r.share_pct).filter((x) => x != null)), audience: avg(a.map((r) => r.audience_avg).filter((x) => x != null)), n: a.length })) };
 }
 
+/** Audience forecast of a programme for a target: the upcoming planned broadcasts (or, with none, the next weekly slots) and an optional what-if slot { date, time, kind }. */
+export function audienceForecast(ctx, { program_id, target, scenario, weeks = 6 }) {
+  const rows = q.all(`SELECT r.date, r.audience_avg, r.share_pct, r.target_label, r.broadcast_id, b.start_time, b.kind FROM ratings r LEFT JOIN broadcasts b ON b.id = r.broadcast_id WHERE r.program_id = ? ORDER BY r.date, r.id`, Number(program_id));
+  const counts = {}; for (const r of rows) counts[r.target_label || ""] = (counts[r.target_label || ""] || 0) + 1;
+  const targets = Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([label, n]) => ({ label, n })), chosen = target != null && target in counts ? target : targets[0]?.label;
+  const hist = rows.filter((r) => (r.target_label || "") === chosen);
+  const mk = (key) => hist.filter((r) => r[key] != null).map((r) => ({ value: Number(r[key]), date: r.date, time: r.start_time, kind: r.kind }));
+  const withRatings = new Set(rows.map((r) => r.broadcast_id).filter(Boolean));
+  let slots = q.all(`SELECT b.id, b.date, b.start_time AS time, b.kind, b.status, e.number AS episode FROM broadcasts b LEFT JOIN episodes e ON e.id = b.episode_id WHERE b.program_id = ? AND b.date >= ? AND b.status IN ('planned','confirmed') ORDER BY b.date, b.start_time`, Number(program_id), today()).filter((b) => !withRatings.has(b.id)).map((b) => ({ id: b.id, date: b.date, time: b.start_time, kind: b.kind, episode: b.episode ? `E${b.episode}` : "" }));
+  let projected = false;
+  if (!slots.length && hist.length) {   // nothing planned: repeat the usual slot every week
+    const last = hist[hist.length - 1], kinds = {}; for (const r of hist) if (r.kind) kinds[r.kind] = (kinds[r.kind] || 0) + 1; const kind = Object.entries(kinds).sort((a, b) => b[1] - a[1])[0]?.[0];
+    let d = last.date; while (d < today()) d = addDays(d, 7);
+    slots = Array.from({ length: Math.max(1, Math.min(12, Number(weeks) || 6)) }, (_, i) => ({ date: addDays(d, 7 * (i + (d === last.date ? 1 : 0))), time: last.start_time || "", kind: kind || "", episode: "" })); projected = true;
+  }
+  const aud = forecastMeasure(mk("audience_avg"), slots, 0), shr = forecastMeasure(mk("share_pct"), slots, 1);
+  let what_if = null;
+  if (scenario?.date) { const sl = [{ date: scenario.date, time: scenario.time || "", kind: scenario.kind || "" }]; const a = forecastMeasure(mk("audience_avg"), sl, 0), h = forecastMeasure(mk("share_pct"), sl, 1); what_if = { slot: sl[0], audience: a.slots[0].forecast, share: h.slots[0].forecast, factors: a.slots[0].factors || [] }; }
+  return { target: chosen || null, targets, history: hist.map((r) => ({ date: r.date, audience: r.audience_avg, share: r.share_pct })), projected,
+    quality: aud.quality, model: { audience: aud.model, share: shr.model }, slots: slots.map((s, i) => ({ ...s, audience: aud.slots[i].forecast, share: shr.slots[i].forecast, factors: aud.slots[i].factors || [] })), what_if };
+}
+
 // ---- delivery readiness & rights coverage ------------------------------------------------------------------------------------------------------
 export function rightsCheck(ctx, { episode_id }) {
   const ep = rawGet("episodes", episode_id); if (!ep) throw bad("no_episode");
@@ -262,6 +287,7 @@ export function rightsCheck(ctx, { episode_id }) {
   return { episode_id: ep.id, air_date: air, rights: items, music_without_right: unlicensed, music_total: cues.length, contracts, ok: !items.some((i) => i.state === "bad") && !unlicensed.length };
 }
 
+/** Checklist of what is missing for an episode to be delivered: approved assets, QC result, blocking issues, compliance checks, rights, cue sheet, approvals and the chosen delivery spec's own checklist. */
 export function deliveryReadiness(ctx, { episode_id, spec_id }) {
   const ep = rawGet("episodes", episode_id); if (!ep) throw bad("no_episode");
   const spec = spec_id ? rawGet("delivery_specs", spec_id) : null;

@@ -11,7 +11,9 @@ import { bad, forbidden, notFound, now, log } from "./util.mjs";
 
 // attachments live in the current organization's own folder (DATA/files for the legacy one, DATA/orgs/<slug>/files for the others)
 const filesDir = () => { const d = orgFilesDir(currentSlug()); fs.mkdirSync(d, { recursive: true, mode: 0o700 }); return d; };
+/** Largest attachment accepted, in bytes (40 MB). */
 export const MAX_FILE = 40 * 1024 * 1024;
+/** Creates the current organization's attachments folder (mode 0700) if it does not exist. */
 export function initFiles() { filesDir(); }
 const safeName = (n) => String(n || "file").replace(/[\\/\0]/g, "_").replace(/[^\p{L}\p{N}._ ()+-]/gu, "_").slice(0, 160) || "file";
 const MIME_OK = /^[\w.+-]+\/[\w.+-]+$/;
@@ -21,6 +23,7 @@ function parentRow(ctx, entity, id) {
   const row = getRow(ctx, entity, id, { raw: true });   // read access + external scoping
   return { e, row };
 }
+/** Encrypts and stores a file attached to a row (it needs write access to that row; externals cannot upload); returns the attachment record. */
 export function addFile(ctx, { entity, id, name, mime, buffer, shared = 0, label = "" }) {
   const { e, row } = parentRow(ctx, entity, id);
   if (!canWrite(ctx, e)) throw forbidden("forbidden");
@@ -35,6 +38,7 @@ export function addFile(ctx, { entity, id, name, mime, buffer, shared = 0, label
   q.run("INSERT INTO changes(ts, user, entity, row_id, action, program_id, diff) VALUES (?, ?, ?, ?, 'attach', ?, ?)", now(), ctx.user, entity, row.id, e.program === "id" ? row.id : (e.program ? row[e.program] : null), JSON.stringify({ file: [null, safeName(name)] }));
   return getAttachment(Number(r.lastInsertRowid));
 }
+/** Attaches a link (http, smb, UNC or absolute path) instead of a file, for storage the app does not hold. */
 export function addLink(ctx, { entity, id, url, label, shared = 0 }) {
   const { e, row } = parentRow(ctx, entity, id);
   if (!canWrite(ctx, e) || ctx.external) throw forbidden("forbidden");
@@ -43,11 +47,19 @@ export function addLink(ctx, { entity, id, url, label, shared = 0 }) {
     entity, row.id, e.program === "id" ? row.id : (e.program ? row[e.program] : null), safeName(label || url), String(url).slice(0, 1000), shared ? 1 : 0, label || "", now(), ctx.user);
   return getAttachment(Number(r.lastInsertRowid));
 }
+/** Attachment metadata by id (no content), or undefined. */
 export const getAttachment = (id) => q.get("SELECT id, entity, row_id, program_id, name, mime, size, sha256, kind, url, shared, label, created, created_by FROM attachments WHERE id = ?", Number(id));
+/** Attachments of a row, newest first; external users only see the ones flagged `shared`. */
 export function listFiles(ctx, entity, id) {
   const { row } = parentRow(ctx, entity, id);
   return q.all("SELECT id, name, mime, size, sha256, kind, url, shared, label, created, created_by FROM attachments WHERE entity = ? AND row_id = ?" + (ctx.external ? " AND shared = 1" : "") + " ORDER BY id DESC", entity, row.id);
 }
+/** Throws unless the caller may read this attachment (same rules as readFile, without decrypting it). */
+export function assertCanRead(ctx, id) {
+  const a = q.get("SELECT entity, row_id, shared, kind FROM attachments WHERE id = ?", Number(id)); if (!a) throw notFound();
+  parentRow(ctx, a.entity, a.row_id); if (ctx.external && !a.shared) throw notFound(); if (a.kind !== "file") throw bad("not_a_file");
+}
+/** Decrypted content of an attachment for a caller who may read its row; 404 when hidden from externals. */
 export function readFile(ctx, id) {
   const a = q.get("SELECT * FROM attachments WHERE id = ?", Number(id)); if (!a) throw notFound();
   parentRow(ctx, a.entity, a.row_id);
@@ -61,6 +73,7 @@ export function readFileRaw(id) {
   const a = q.get("SELECT * FROM attachments WHERE id = ? AND kind = 'file'", Number(id)); if (!a) return null;
   try { return { name: a.name, mime: a.mime, buffer: decBuffer(fs.readFileSync(path.join(filesDir(), a.path))) }; } catch { return null; }
 }
+/** Deletes an attachment record and its encrypted file (needs write access to the row) and logs it. */
 export function removeFile(ctx, id) {
   const a = q.get("SELECT * FROM attachments WHERE id = ?", Number(id)); if (!a) throw notFound();
   const { e } = parentRow(ctx, a.entity, a.row_id);
@@ -70,6 +83,7 @@ export function removeFile(ctx, id) {
   q.run("INSERT INTO changes(ts, user, entity, row_id, action, program_id, diff) VALUES (?, ?, ?, ?, 'detach', ?, ?)", now(), ctx.user, a.entity, a.row_id, a.program_id, JSON.stringify({ file: [a.name, null] }));
   return { ok: true };
 }
+/** Deletes encrypted files that no attachment record points to (leftovers of failed uploads); run by the maintenance job. */
 export function sweepFiles() {
   const used = new Set(q.all("SELECT path FROM attachments WHERE path IS NOT NULL").map((r) => r.path));
   let n = 0; for (const f of fs.readdirSync(filesDir())) if (f.endsWith(".bin") && !used.has(f)) { fs.rmSync(path.join(filesDir(), f), { force: true }); n++; }

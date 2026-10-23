@@ -7,7 +7,9 @@ import { spawn, spawnSync } from "node:child_process";
 import { pipeline } from "node:stream/promises";
 
 const [, , op, HOME, ...args] = process.argv;
+/** Prints a JSON result line. */
 const out = (v) => { process.stdout.write(JSON.stringify(v) + "\n"); };
+/** Prints a JSON error line and exits with code 1. */
 const die = (code, extra = {}) => { process.stdout.write(JSON.stringify({ error: code, ...extra }) + "\n"); process.exit(1); };
 const TRASH = ".Trash", ORIGINS = path.join(TRASH, ".origins.json");
 
@@ -17,26 +19,34 @@ function abs(rel) {
   const full = path.resolve(HOME, rel); if (full !== HOME && !full.startsWith(HOME + path.sep)) die("outside_home");
   return full;
 }
+/** Path relative to the home, with forward slashes. */
 const relOf = (full) => path.relative(HOME, full).split(path.sep).join("/");
+/** "dir", "file" or "other" for a path (a link counts as what it points to). */
 const KIND = (st, lst) => (lst.isSymbolicLink() ? (st?.isDirectory() ? "dir" : "file") : lst.isDirectory() ? "dir" : lst.isFile() ? "file" : "other");
+/** Listing entry of a file or folder (name, kind, size, times, link target). */
 function entry(dir, name) {
   const p = path.join(dir, name); let lst; try { lst = fs.lstatSync(p); } catch { return null; }
   let st = lst; if (lst.isSymbolicLink()) { try { st = fs.statSync(p); } catch { st = null; } }
   return { name, type: KIND(st, lst), size: st?.isFile() ? st.size : 0, mtime: (st || lst).mtimeMs, mode: (lst.mode & 0o777).toString(8), link: lst.isSymbolicLink() ? 1 : 0, ...(st === null ? { broken: 1 } : {}) };
 }
+/** A name that does not exist yet in a folder ("name (2)", "name (3)"...). */
 function uniqueIn(dir, name) {
   if (!fs.existsSync(path.join(dir, name))) return name;
   const ext = path.extname(name), base = name.slice(0, name.length - ext.length); for (let i = 2; i < 1000; i++) { const n = `${base} ${i}${ext}`; if (!fs.existsSync(path.join(dir, n))) return n; }
   die("exists");
 }
+/** Total size of a folder, counting at most a budget of entries. */
 function size(p, budget = { n: 200000 }) {
   let total = 0; const lst = fs.lstatSync(p); if (!lst.isDirectory()) return lst.size;
   for (const f of fs.readdirSync(p)) { if (budget.n-- <= 0) break; try { total += size(path.join(p, f), budget); } catch { /* unreadable */ } } return total;
 }
 /** rename that also works across volumes (EXDEV): the trash is in the home, a project folder can be on another disk. */
 function mv(from, to) { try { fs.renameSync(from, to); } catch (e) { if (e.code !== "EXDEV") throw e; fs.cpSync(from, to, { recursive: true, errorOnExist: true, force: false, verbatimSymlinks: true }); fs.rmSync(from, { recursive: true, force: true }); } }
+/** Refuses to move or copy a folder into itself. */
 const notInside = (from, to) => { if (to === from || to.startsWith(from + path.sep)) die("into_itself"); };
+/** Reads where trashed items came from (to restore them). */
 const readOrigins = () => { try { return JSON.parse(fs.readFileSync(abs(ORIGINS), "utf8")); } catch { return {}; } };
+/** Saves where trashed items came from. */
 const writeOrigins = (o) => { fs.mkdirSync(abs(TRASH), { recursive: true }); fs.writeFileSync(abs(ORIGINS), JSON.stringify(o)); };
 
 try {

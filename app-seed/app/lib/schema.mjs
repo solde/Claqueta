@@ -7,8 +7,10 @@ import legal from "./schema/legal.mjs";
 import media from "./schema/media.mjs";
 import broadcast from "./schema/broadcast.mjs";
 import docs from "./schema/docs.mjs";
+import memoir from "./schema/memoir.mjs";
 
-export const ENTITIES = { ...core, ...people, ...finance, ...legal, ...media, ...broadcast, ...docs };
+/** Every entity of the application, merged from lib/schema/*.mjs (the single declaration the database, API, forms, i18n checks and documents are built from). */
+export const ENTITIES = { ...core, ...people, ...finance, ...legal, ...media, ...broadcast, ...docs, ...memoir };
 
 /** module -> permission needed to read / write. `own` = rows of the current user only (notifications). */
 export const MODULES = {
@@ -19,6 +21,7 @@ export const MODULES = {
   own: { view: "app.view", edit: "app.view" },
 };
 
+/** The closed list of permissions; roles are sets of these. */
 export const PERMS = ["app.view", "app.edit", "fin.view", "fin.edit", "fin.approve", "legal.view", "legal.edit", "people.view", "people.edit", "external", "agent.jobs", "agent.console", "agent.shell", "service.manage", "users.manage"];
 
 for (const [name, e] of Object.entries(ENTITIES)) {
@@ -40,7 +43,9 @@ for (const e of Object.values(ENTITIES)) {
 /** Columns added to every table by the engine. */
 export const SYSTEM_COLS = ["id", "created", "updated", "created_by", "updated_by", "rev"];
 
+/** Whether a field is stored encrypted (type `secret`). */
 export const isSecretField = (fd) => fd.type === "secret";
+/** SQLite column type of a field type (money and ints are INTEGER, num/pct REAL, everything else TEXT). */
 export const colType = (fd) => ({ int: "INTEGER", ref: "INTEGER", bool: "INTEGER", money: "INTEGER", num: "REAL", pct: "REAL" })[fd.type] || "TEXT";
 
 /** Human label of a row, built from the entity's `title` fields. */

@@ -4,8 +4,11 @@ const open = () => new Promise((res, rej) => { const r = indexedDB.open(DB, 1); 
 const tx = async (mode, fn) => { const db = await open(); return new Promise((res, rej) => { const t = db.transaction("queue", mode); const out = fn(t.objectStore("queue")); t.oncomplete = () => res(out.result); t.onerror = () => rej(t.error); }); };
 // queued writes remember the organization they were made in and are only replayed there (the person may switch company before the network is back)
 let ORG = ""; export const setOrg = (o) => { ORG = o || ""; };
+/** Stores a failed small update in IndexedDB to replay later. */
 export async function queueOffline(item) { try { await tx("readwrite", (s) => s.add({ ...item, org: ORG, ts: Date.now() })); } catch { /* storage unavailable */ } }
+/** Queued updates. */
 export const pending = async () => { try { return await tx("readonly", (s) => s.getAll()); } catch { return []; } };
+/** Replays queued updates of the current organization in order; stops at the first network failure. */
 export async function flush(onDone) {
   const items = await pending(); let ok = 0;
   for (const it of items) {

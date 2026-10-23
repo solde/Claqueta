@@ -1,8 +1,8 @@
 ---
 name: collado-servicio
-description: Modificar el propio servicio Collado (código de la app en /data/app) — añadir campos, entidades, informes, vistas y reglas de negocio, probar, reiniciar y volver atrás. Solo para personas con el permiso service.manage; úsala cuando te pidan cambiar cómo funciona Collado, no para trabajo de producción.
+description: Modificar el propio servicio Claqueta (código de la app en /data/app) — añadir campos, entidades, informes, vistas y reglas de negocio, probar, reiniciar y volver atrás. Solo para personas con el permiso service.manage; úsala cuando te pidan cambiar cómo funciona Claqueta, no para trabajo de producción.
 ---
-# Cambiar Collado (solo con permiso `service.manage`)
+# Cambiar Claqueta (solo con permiso `service.manage`)
 
 > **En la app de escritorio (Claqueta) esta habilidad NO se aplica:** el código de la app viene dentro del programa y es de solo lectura (no hay `/data/app`, ni `git`, ni `rollback`). Si te piden cambiar cómo funciona la app, explica que se hace en el repositorio de la aplicación y se publica como versión nueva; ofrécete a redactar la petición con todo el detalle.
 

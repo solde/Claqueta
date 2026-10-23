@@ -2,6 +2,7 @@
 export class HttpError extends Error { constructor(status, body, url) { super(`http_${status}`); this.status = status; this.body = String(body || "").slice(0, 300); this.url = String(url).replace(/\?.*$/, ""); } }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/** HTTP call for the providers: bearer token, retries with back-off on throttling and server errors, one forced token refresh on 401; throws HttpError for anything not expected. */
 export async function send({ fetchImpl = fetch, tokens, url, init = {}, retries = 4, expect = [200], auth = true, sleepMs = (n) => 500 * 2 ** n }) {
   let refreshed = false;
   for (let n = 0; ; n++) {
@@ -13,4 +14,5 @@ export async function send({ fetchImpl = fetch, tokens, url, init = {}, retries 
     throw new HttpError(r.status, await r.text().catch(() => ""), url);
   }
 }
+/** Object names the providers accept (letters, digits, dot, underscore, hyphen). */
 export const NAME_OK = /^[A-Za-z0-9._-]{1,120}$/;

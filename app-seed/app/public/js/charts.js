@@ -23,6 +23,7 @@ export function barChart({ rows, series = [""], type = "bar", height = 240, widt
   const legend = series.length > 1 || series[0] ? h("div.legend", series.map((nm, j) => h("span", h("i", { style: { background: colors[j % colors.length] } }), nm))) : null;
   return h("div", svg, legend);
 }
+/** Donut chart (SVG) with a legend: items [{ label, value, color? }] and an optional centre text. */
 export function donut({ items, size = 180, center }) {
   const total = items.reduce((a, b) => a + b.value, 0) || 1; const R = size / 2 - 6, r0 = R * 0.55, c = size / 2; let a0 = -Math.PI / 2; const svg = s("svg", { viewBox: `0 0 ${size} ${size}`, width: size, height: size, class: "chart", role: "img" });
   items.forEach((it, i) => { if (!it.value) return; const a1 = a0 + (it.value / total) * Math.PI * 2 - 0.0001; const big = a1 - a0 > Math.PI ? 1 : 0; const p = (a, r) => `${c + Math.cos(a) * r},${c + Math.sin(a) * r}`;
@@ -30,6 +31,7 @@ export function donut({ items, size = 180, center }) {
   if (center !== undefined) svg.append(s("text", { x: c, y: c + 7, "text-anchor": "middle", "font-size": 22, "font-weight": 700 }, center));
   return h("div.nb-row", { style: { flexWrap: "nowrap" } }, svg, h("div.legend", { style: { flexDirection: "column" } }, items.map((it, i) => h("span", h("i", { style: { background: it.color || PAL[i % PAL.length] } }), `${it.label} · ${it.value}`))));
 }
+/** Horizontal progress-style bars: items [{ label, value, color? }] scaled to the largest (or `max`). */
 export function hbars({ items, money = false, max }) {
   const m = max || Math.max(...items.map((i) => i.value), 1);
   return h("div", items.map((it) => h("div.bar-row", h("span", { title: it.label }, it.label), h("div.nb-progress", h("i", { style: { width: Math.max(2, (it.value / m) * 100) + "%", background: it.color || "var(--nb-blue)" } })), h("b.nb-mono", money ? fmt.money(it.value) : fmt.num(it.value, 1)))));

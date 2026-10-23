@@ -1,5 +1,6 @@
 // Hyperscript helper: h("div.class#id", { onclick, style: {...}, dataset: {...} }, child, [children], "text").
 const SVG_NS = "http://www.w3.org/2000/svg";
+/** Hyperscript: h("div.class#id", { onclick, style, dataset, html }, ...children) builds a DOM (or SVG) element; children can be nodes, strings, numbers or nested arrays, and false/null are skipped. */
 export function h(tag, props, ...kids) {
   if (props instanceof Node || typeof props === "string" || Array.isArray(props) || typeof props === "number") { kids.unshift(props); props = null; }
   const m = /^([a-z0-9]+)((?:[.#][\w-]+)*)$/i.exec(tag) || [null, tag, ""];
@@ -18,13 +19,19 @@ export function h(tag, props, ...kids) {
   }
   append(el, kids); return el;
 }
+/** Appends children, flattening arrays and turning strings into text nodes. */
 function append(el, kids) {
   for (const k of kids.flat(Infinity)) { if (k === null || k === undefined || k === false || k === true) continue; el.append(k instanceof Node ? k : document.createTextNode(String(k))); }
 }
 export const $ = (sel, root = document) => root.querySelector(sel);
 export const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
+/** Removes all children of an element. */
 export function clear(el) { while (el.firstChild) el.removeChild(el.firstChild); return el; }
+/** Replaces the children of an element. */
 export function mount(el, ...kids) { clear(el); append(el, kids); return el; }
+/** Delays a function until `ms` after its last call. */
 export const debounce = (fn, ms = 250) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+/** Escapes &, <, > and " for HTML. */
 export const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+/** Saves a Blob as a file with a temporary link. */
 export function download(name, blob) { const a = h("a", { href: URL.createObjectURL(blob), download: name }); document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000); }

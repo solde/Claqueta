@@ -3,11 +3,13 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+/** True on Windows. */
 export const IS_WIN = process.platform === "win32";
 /** Inside Electron the "node" binary is the Electron executable and only behaves as Node with ELECTRON_RUN_AS_NODE=1. */
 export const NODE_ENV = process.versions.electron ? { ELECTRON_RUN_AS_NODE: "1" } : {};
 /** Variables Windows needs in any child process (sockets, crypto, cmd.exe...). */
 const WIN_KEYS = ["SystemRoot", "SYSTEMROOT", "windir", "ComSpec", "PATHEXT", "TEMP", "TMP", "ProgramData", "ProgramFiles", "ProgramFiles(x86)", "ProgramW6432", "LOCALAPPDATA", "APPDATA", "USERNAME", "COMPUTERNAME", "NUMBER_OF_PROCESSORS", "PROCESSOR_ARCHITECTURE"];
+/** The few variables a child process needs to work at all on this platform (Windows needs system variables; elsewhere only a temp dir). */
 export const baseEnv = () => (IS_WIN ? Object.fromEntries(WIN_KEYS.filter((k) => process.env[k] !== undefined).map((k) => [k, process.env[k]])) : { TMPDIR: process.env.TMPDIR || os.tmpdir() });
 
 /** The user's real command search path plus the usual places where Claude Code and friends get installed (a GUI app does not inherit the terminal's PATH on macOS/Linux). */

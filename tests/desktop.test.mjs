@@ -1,3 +1,4 @@
+// Unit tests of the desktop-only pieces: portable users and clean environments, tool launchers, pty consoles, zip without a binary, password hashes, the local identity and the Neumorphism skin.
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";

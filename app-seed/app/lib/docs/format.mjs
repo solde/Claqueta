@@ -1,8 +1,10 @@
 // Locale-aware formatting and the fixed strings of generated documents (cover labels, TOC title, page counters...). Documents are produced in es / ca / en.
 export const LANGS = ["es", "ca", "en"];
+/** Normalises a language code to es, ca or en (default es). */
 export const norm = (l) => (LANGS.includes(String(l || "").slice(0, 2)) ? String(l).slice(0, 2) : "es");
 const INTL = { es: "es-ES", ca: "ca-ES", en: "en-GB" };
 
+/** Fixed texts of generated documents (cover labels, index title, column headers) in each language. */
 export const STR = {
   es: { c_hora: "Hora", c_presupuestado: "Presupuestado", c_real: "Real", c_comprometido: "Comprometido", c_desviacion: "Desviación", c_usado: "% usado", c_capitulo: "Capítulo", c_previsto: "Previsto", c_mes: "Mes", c_cobros: "Cobros", c_pagos: "Pagos", c_neto: "Neto", c_saldo: "Saldo", c_concepto: "Concepto", c_base: "Base", c_cuota: "Cuota", c_facturas: "Facturas", c_perceptor: "Perceptor", c_nif: "NIF", c_retencion: "Retención", c_ingresos_previstos: "Ingresos previstos", c_coste_previsto: "Coste previsto", c_margen_previsto: "Margen previsto", c_margen_pct: "Margen %", c_facturado: "Facturado", c_coste_real: "Coste real", c_audiencia_miles: "Audiencia (miles)", c_cuota_pct: "Cuota %", c_rating: "Rating %", c_cobertura_miles: "Cobertura (miles)", c_episodios: "Episodios", c_horas: "Horas", c_extra: "Extra", c_nocturnas: "Nocturnas", c_incidencias: "Incidencias", c_gravedad: "Gravedad", c_tipo: "Tipo", c_fecha: "Fecha", c_derecho: "Derecho", c_fin_ventana: "Fin ventana", c_estado: "Estado", c_cashflow: "Cashflow", c_rentabilidad: "Rentabilidad", c_alertas: "Alertas", c_derechos: "Derechos", c_equipo: "Equipo", c_pipeline: "Pipeline", c_retenciones: "Retenciones", c_presupuesto_por_capitulo: "Presupuesto por capítulo", c_desviacion_por_episodio: "Desviación por episodio", c_resultado_a_ingresar_devolver: "Resultado (a ingresar / devolver)", c_cue_sheet: "Cue sheet", c_iva_repercutido: "IVA repercutido", c_iva_soportado: "IVA soportado", c_sin_partida: "Sin partida", toc: "Índice", page: "Página", of: "de", draft: "BORRADOR", confidential: "Confidencial", version: "Versión", date: "Fecha", author: "Autor", prepared_for: "Preparado para", total: "Total", subtotal: "Subtotal", vat: "IVA", sources: "Fuentes",
     signature: "Firma", date_place: "Lugar y fecha", no_data: "Sin datos", notes: "Notas", index_figure: "Figura", generated: "Generado el", program: "Programa", episode: "Episodio", season: "Temporada", status: "Estado" },
@@ -11,19 +13,28 @@ export const STR = {
   en: { c_hora: "Time", c_presupuestado: "Budgeted", c_real: "Actual", c_comprometido: "Committed", c_desviacion: "Variance", c_usado: "% used", c_capitulo: "Chapter", c_previsto: "Planned", c_mes: "Month", c_cobros: "Receipts", c_pagos: "Payments", c_neto: "Net", c_saldo: "Balance", c_concepto: "Item", c_base: "Net", c_cuota: "VAT", c_facturas: "Invoices", c_perceptor: "Payee", c_nif: "Tax ID", c_retencion: "Withholding", c_ingresos_previstos: "Forecast income", c_coste_previsto: "Forecast cost", c_margen_previsto: "Forecast margin", c_margen_pct: "Margin %", c_facturado: "Invoiced", c_coste_real: "Actual cost", c_audiencia_miles: "Audience (thousands)", c_cuota_pct: "Share %", c_rating: "Rating %", c_cobertura_miles: "Reach (thousands)", c_episodios: "Episodes", c_horas: "Hours", c_extra: "Overtime", c_nocturnas: "Night", c_incidencias: "Issues", c_gravedad: "Severity", c_tipo: "Type", c_fecha: "Date", c_derecho: "Right", c_fin_ventana: "Window end", c_estado: "Status", c_cashflow: "Cashflow", c_rentabilidad: "Profitability", c_alertas: "Alerts", c_derechos: "Rights", c_equipo: "Crew", c_pipeline: "Pipeline", c_retenciones: "Withholdings", c_presupuesto_por_capitulo: "Budget by chapter", c_desviacion_por_episodio: "Variance per episode", c_resultado_a_ingresar_devolver: "Result (to pay / refund)", c_cue_sheet: "Cue sheet", c_iva_repercutido: "Output VAT", c_iva_soportado: "Input VAT", c_sin_partida: "Unbudgeted", toc: "Contents", page: "Page", of: "of", draft: "DRAFT", confidential: "Confidential", version: "Version", date: "Date", author: "Author", prepared_for: "Prepared for", total: "Total", subtotal: "Subtotal", vat: "VAT", sources: "Sources",
     signature: "Signature", date_place: "Place and date", no_data: "No data", notes: "Notes", index_figure: "Figure", generated: "Generated on", program: "Programme", episode: "Episode", season: "Season", status: "Status" },
 };
+/** A fixed text by key and language, falling back to Spanish and then to the key. */
 export const str = (lang, k) => STR[norm(lang)][k] ?? STR.es[k] ?? k;
 
+/** Currency format for a language ("1.234,50 €"). */
 export function money(v, lang = "es", cur = "EUR") {
   if (v === null || v === undefined || v === "" || Number.isNaN(Number(v))) return "";
   return new Intl.NumberFormat(INTL[norm(lang)], { style: "currency", currency: cur, minimumFractionDigits: 2, useGrouping: "always" }).format(Number(v));
 }
+/** Number format for a language with `d` decimals; empty for null or non-numeric values. */
 export const num = (v, lang = "es", d = 0) => (v === null || v === undefined || v === "" || Number.isNaN(Number(v)) ? "" : new Intl.NumberFormat(INTL[norm(lang)], { maximumFractionDigits: d, minimumFractionDigits: d, useGrouping: "always" }).format(Number(v)));
+/** Percentage with a space before the sign ("12,5 %"). */
 export const pct = (v, lang = "es", d = 1) => (v === null || v === undefined || v === "" ? "" : num(v, lang, d) + " %");
+/** Localised date from YYYY-MM-DD or an ISO date-time (`style` = short, medium, long...). */
 export function date(v, lang = "es", style = "medium") {
   if (!v) return ""; const s = String(v); const d = new Date(s.length === 10 ? s + "T00:00:00Z" : s); if (Number.isNaN(d.getTime())) return s;
   return new Intl.DateTimeFormat(INTL[norm(lang)], { dateStyle: style, timeZone: s.length === 10 ? "UTC" : undefined }).format(d);
 }
+/** Localised date and time. */
 export function datetime(v, lang = "es") { if (!v) return ""; const d = new Date(String(v)); return Number.isNaN(d.getTime()) ? String(v) : new Intl.DateTimeFormat(INTL[norm(lang)], { dateStyle: "medium", timeStyle: "short" }).format(d); }
+/** Seconds to "m:ss" or "h:mm:ss". */
 export function duration(sec) { sec = Math.round(Number(sec) || 0); const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60; return (h ? h + ":" : "") + String(m).padStart(h ? 2 : 1, "0") + ":" + String(s).padStart(2, "0"); }
+/** Escapes &, <, > and " for HTML text and attributes. */
 export const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+/** Escapes Markdown control characters so substituted data is shown literally. */
 export const mdEscape = (s) => String(s ?? "").replace(/[\\`*_{}\[\]()<>#|~=]/g, "\\$&");

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Talk to the Collado API with YOUR permissions (the token in ~/.collado/token). Output is JSON.
+// Talk to the Claqueta API with YOUR permissions (the token in ~/.collado/token). Output is JSON.
 //   collado-api schema [entity]                       data model (entities, fields, enums) as you can see it
 //   collado-api list <entity> [field=value ... q=text sort=-date limit=50]     list rows ("f." filters: status=in:a|b  date=>=2026-01-01)
 //   collado-api get <entity> <id>                     one row (+ labels of references)
@@ -15,9 +15,13 @@ import fs from "node:fs";
 import { app, fail, parseArgs } from "./client.mjs";
 const { pos, flags } = parseArgs(process.argv.slice(2));
 const [cmd, a, b, c] = pos;
+/** A JSON body from an argument: inline JSON, `@file`, or `-` for stdin. */
 const body = (x) => { if (x === undefined) return {}; if (x === "-") return JSON.parse(fs.readFileSync(0, "utf8")); if (x.startsWith("@")) return JSON.parse(fs.readFileSync(x.slice(1), "utf8")); try { return JSON.parse(x); } catch { fail("el cuerpo no es JSON válido"); } };
+/** `key=value` arguments to an object. */
 const kv = (arr) => { const out = {}; for (const s of arr) { const i = s.indexOf("="); if (i < 0) fail(`argumento no válido: ${s} (usa campo=valor)`); out[s.slice(0, i)] = s.slice(i + 1); } return out; };
+/** Object to a query string. */
 const qs = (o) => { const p = new URLSearchParams(o); const s = p.toString(); return s ? "?" + s : ""; };
+/** Prints a result as JSON (compact with --compact). */
 const out = (v) => console.log(JSON.stringify(v, null, flags.compact ? 0 : 2));
 const reserved = new Set(["q", "sort", "limit", "offset", "ids", "refs"]);
 switch (cmd) {

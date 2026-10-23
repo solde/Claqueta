@@ -18,6 +18,9 @@ La ficha de un programa tiene el campo **Carpeta local** (`collado-api get progr
 4. **Comprueba la caja de herramientas** (siguiente sección) antes de crear el primer documento.
 5. No borres ni muevas lo que ya hay en esa carpeta sin que te lo pidan; no la sincronices por tu cuenta con nada externo.
 
+## Memorias, imágenes y gráficos de un proyecto
+Para una **memoria de proyecto** (subvención, anual, cliente, cierre de temporada, festivales) o cuando te pidan **imágenes, infografías o gráficos** de un programa, usa `collado-doc memoir`, `collado-doc media` y `collado-doc graphic` (skill **collado-memorias**): redactas por secciones con las cifras reales del proyecto y tú mismo produces el material gráfico, que queda en la **galería** del programa. Guarda los borradores y los PDF en la carpeta local del proyecto (`Documentos/`).
+
 ## Caja de herramientas: comprueba que puedes hacer documentos de la máxima calidad
 **Al empezar a trabajar en cada proyecto** (y cuando un documento salga peor de lo esperado, o falle una herramienta) ejecuta:
 

@@ -1,5 +1,6 @@
 // How the app asks for an agent run. In the pod it calls agentd (which runs `claude -p` as the person who asked); in development AGENT_JOB_CMD is a local command.
 import { spawn } from "node:child_process";
+/** The function that runs an agent generation: through agentd in production, or the local command AGENT_JOB_CMD in development; null when neither exists. */
 export function makeRunner() {
   const url = process.env.AGENTD_URL, key = process.env.APP_KEY || process.env.AGENTD_KEY;
   if (url) return async (job) => {

@@ -1,3 +1,4 @@
+// Unit tests of the update check (desktop/update.mjs): version comparison, picking the installer of each system and the release listing rules.
 import test from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";

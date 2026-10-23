@@ -2,10 +2,13 @@
 // so a compromised app (or an agent editing it) cannot impersonate the gateway towards agentd. Console users get signed, expiring tokens (their own permissions).
 import crypto from "node:crypto";
 
+/** Sub-key derived from the master key and a label (HMAC-SHA256, hex): the app never receives the master key itself. */
 export const derive = (master, label) => crypto.createHmac("sha256", master).update(label).digest("hex");
+/** Constant-time string comparison. */
 export const safeEqual = (a, b) => { const x = Buffer.from(String(a ?? "")), y = Buffer.from(String(b ?? "")); return x.length === y.length && x.length > 0 && crypto.timingSafeEqual(x, y); };
 const b64 = (s) => Buffer.from(s).toString("base64url");
 
+/** The keys of the pod from INTERNAL_KEY: the gateway's own, the app's derived key and the token-signing key. */
 export function internalKeys(master) {
   if (!master) return null;
   return { gateway: master, app: derive(master, "app-v1"), token: derive(master, "user-token-v1") };
@@ -15,6 +18,7 @@ export function signToken(tokenKey, { user, perms, org = "principal", ttlS = 864
   const p = b64(JSON.stringify({ u: user, p: perms, o: org, e: Math.floor(Date.now() / 1000) + ttlS }));
   return `${p}.${crypto.createHmac("sha256", tokenKey).update(p).digest("base64url")}`;
 }
+/** Verifies a token's signature and expiry; returns { user, perms, org } or null. */
 export function verifyToken(tokenKey, token) {
   const [p, sig] = String(token || "").split("."); if (!p || !sig) return null;
   const want = crypto.createHmac("sha256", tokenKey).update(p).digest("base64url");

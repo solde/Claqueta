@@ -11,12 +11,14 @@ export function hook(entity, when, fn) { ((hooks[entity] ||= { before: [], after
 const run = async (list, ...a) => { for (const fn of list || []) fn(...a); };
 
 const ent = (name) => { const e = ENTITIES[name]; if (!e) throw notFound(`unknown_entity:${name}`); return e; };
+/** Names of every entity of the schema. */
 export const entityNames = () => Object.keys(ENTITIES);
 const Q = (n) => `"${n}"`;
 const SYS_NUM = new Set(["id", "rev"]);
 
 // ---- conversion -----------------------------------------------------------------------------------------------------------------------
 function parseJson(v) { if (v == null || v === "") return null; try { return JSON.parse(v); } catch { return null; } }
+/** Database row to API row: money from cents to euros, JSON/tags parsed, secrets decrypted, bools as 0/1; fields the caller may not read are left out. */
 export function fromDb(e, row, ctx) {
   if (!row) return row;
   const out = { id: row.id, created: row.created, updated: row.updated, created_by: row.created_by, updated_by: row.updated_by, rev: row.rev };
@@ -36,7 +38,9 @@ export function fromDb(e, row, ctx) {
   return out;
 }
 
+/** undefined, null and "" all count as "no value" when converting input. */
 const emptyish = (v) => v === undefined || v === null || v === "";
+/** Validates and converts one API value to its database representation by field type (ranges, formats, options, references that must exist); throws 400 with a stable code per field. */
 function convert(e, fd, v) {
   if (emptyish(v)) return fd.type === "bool" ? 0 : (["text", "long", "enum"].includes(fd.type) ? (fd.type === "enum" ? null : "") : null);
   const name = `${e.name}.${fd.name}`;
@@ -87,6 +91,7 @@ function toDb(ctx, e, body, { partial, internal } = {}) {
   return out;
 }
 
+/** Turns SQLite constraint failures into API errors: duplicates and in-use rows are 409, broken references 400. */
 function mapDbError(err, op) {
   const m = String(err?.message || err);
   if (/UNIQUE constraint failed: ([\w]+)\.(\w+)/.test(m)) throw conflict(`duplicate:${m.match(/\.(\w+)/)[1]}`);
@@ -109,6 +114,7 @@ function scopeClause(ctx, e) {
 }
 
 const OPS = [[">=", ">="], ["<=", "<="], ["!=", "!="], [">", ">"], ["<", "<"]];
+/** One `f.<field>=<value>` filter to SQL. Values: plain equality, `>=` `<=` `>` `<` `!=`, `in:a|b`, `~text` (contains), `null`, `notnull`. */
 function filterClause(e, field, raw) {
   const fd = e.fields[field]; const col = fd ? Q(field) : (SYS_NUM.has(field) || ["created", "updated", "created_by", "updated_by"].includes(field) ? Q(field) : null);
   if (!col) throw bad(`unknown_field:${field}`);
@@ -122,6 +128,7 @@ function filterClause(e, field, raw) {
   return { sql: `${col} = ?`, args: [val(s)] };
 }
 
+/** ORDER BY from a `sort` string (`-field` descending, comma separated), validated against the schema; `id` is always the last tie-breaker. */
 function orderBy(e, sort) {
   const parts = [];
   for (const s of String(sort || e.sort).split(",")) {
@@ -132,6 +139,7 @@ function orderBy(e, sort) {
   return parts.join(", ") + (parts.some((p) => p.startsWith('"id"')) ? "" : ', "id" ASC');
 }
 
+/** WHERE clause for list/count: external scoping, filters, explicit ids and free-text search over the entity's `search` fields. */
 function buildList(ctx, e, params = {}) {
   const where = [], args = [];
   const sc = scopeClause(ctx, e); if (sc.sql) { where.push(sc.sql); args.push(...sc.args); }
@@ -148,6 +156,7 @@ function buildList(ctx, e, params = {}) {
 // ---- reads ----------------------------------------------------------------------------------------------------------------------------
 function assertRead(ctx, e) { if (!canRead(ctx, e)) throw forbidden("forbidden"); }
 
+/** Lists rows of an entity with filters, search, sort and paging; returns { rows, total, refs } where refs maps referenced ids to labels (omit with refs=0). */
 export function list(ctx, name, params = {}) {
   const e = ent(name); assertRead(ctx, e);
   const w = buildList(ctx, e, params);
@@ -157,6 +166,7 @@ export function list(ctx, name, params = {}) {
   return { rows, total, refs: params.refs === "0" ? undefined : refLabels(ctx, e, rows) };
 }
 
+/** One row by id (404 when it does not exist or the caller may not see it); `raw` returns the database row without conversion. */
 export function getRow(ctx, name, id, { raw } = {}) {
   const e = ent(name); if (ctx) assertRead(ctx, e);
   const sc = ctx ? scopeClause(ctx, e) : { sql: "", args: [] };
@@ -164,12 +174,14 @@ export function getRow(ctx, name, id, { raw } = {}) {
   if (!row) throw notFound();
   return raw ? row : fromDb(e, row, ctx);
 }
+/** A row plus the labels of the rows it references (what the detail view needs). */
 export function get(ctx, name, id) {
   const e = ent(name); const row = getRow(ctx, name, id);
   return { row, refs: refLabels(ctx, e, [row]) };
 }
 /** Internal read without permission checks (hooks, reports). */
 export const rawGet = (name, id) => (id == null ? undefined : q.get(`SELECT * FROM ${Q(ent(name).table)} WHERE id = ?`, Number(id)));
+/** Display label of a row (its title fields joined), or "" when it does not exist. */
 export const label = (name, id) => { const e = ent(name); const r = rawGet(name, id); return r ? rowLabel(e, r) : ""; };
 
 /** { entity: { id: "label" } } for every ref field present in `rows`. */
@@ -207,6 +219,7 @@ function assertWrite(ctx, e, existing, op) {
   if (existing && pf && !memberPrograms(ctx).includes(existing[pf])) throw forbidden("forbidden");
 }
 
+/** Creates a row: permission and field checks, validation, `before` hooks (business rules), insert, change log, `after` hooks, all in one transaction. `opts.internal` allows read-only fields (system writes). */
 export async function create(ctx, name, body, opts = {}) {
   const e = ent(name);
   if (ctx && e.module === "own" && !ctx.local) throw forbidden("forbidden");
@@ -232,6 +245,7 @@ export async function create(ctx, name, body, opts = {}) {
   });
 }
 
+/** Partial update with optimistic concurrency (`rev` must match when given), field-level permissions, hooks and a diff in the change log. No-op updates write nothing. */
 export async function update(ctx, name, id, body, opts = {}) {
   const e = ent(name);
   return tx(() => {
@@ -262,6 +276,7 @@ export async function update(ctx, name, id, body, opts = {}) {
   });
 }
 
+/** Deletes a row (blocked with 409 `in_use` when something references it), logs it, removes its attachments and runs hooks. */
 export async function remove(ctx, name, id, opts = {}) {
   const e = ent(name);
   return tx(() => {
@@ -278,10 +293,12 @@ export async function remove(ctx, name, id, opts = {}) {
   });
 }
 
+/** Change history of a row (newest first) with secret values masked and fields the caller cannot read removed. */
 export function history(ctx, name, id, limit = 100) {
   const e = ent(name); getRow(ctx, name, id).id;
   return q.all("SELECT id, ts, user, action, diff FROM changes WHERE entity = ? AND row_id = ? ORDER BY id DESC LIMIT ?", name, Number(id), limit).map((r) => ({ ...r, diff: maskDiff(e, ctx, JSON.parse(r.diff || "{}"), r.action) }));
 }
+/** Hides secrets and unreadable fields in a stored change diff, and converts money back to euros. */
 function maskDiff(e, ctx, d, action) {
   const out = {};
   for (const [k, v] of Object.entries(d)) {
@@ -306,6 +323,7 @@ export function activity(ctx, { program, limit = 60 } = {}) {
   return out;
 }
 
+/** Global search across every readable entity that declares search fields; at least two characters, a few hits per entity. */
 export function search(ctx, text, limit = 6) {
   const t = String(text || "").trim(); if (t.length < 2) return [];
   const out = [];

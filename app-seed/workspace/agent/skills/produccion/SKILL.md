@@ -24,7 +24,7 @@ Productor/a ejecutivo/a (financiación, relación con cadena, riesgo) · Directo
 - **Radio en directo**: reloj de programación (hot clock), invitados, publicidad y patrocinio, plan B técnico, versión podcast bajo demanda.
 - **Podcast**: concepto y público, identidad sonora, hosting/distribución (RSS), calendario editorial, métricas (descargas, oyentes únicos, retención).
 
-## Cómo usar Collado para esto
+## Cómo usar Claqueta para esto
 - Crea el programa con una **plantilla de flujo** (`collado-api action apply-template '{"program_id":N}'`): genera temporada, hitos, tareas, episodios y un presupuesto de partida.
 - Estados de episodio: `planned → script → recorded → edited → qc → delivered → aired`. Mantén las fechas `shoot_date`, `edit_due`, `delivery_due`, `air_date` (la acción `plan-episode` las calcula hacia atrás desde la emisión).
 - Revisa a diario `collado-api alerts` (retrasos, conflictos de recursos, vencimientos, descansos) y el Gantt (`report gantt program=N`: camino crítico y dependencias violadas).

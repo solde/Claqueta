@@ -6,6 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+/** Renders the app icon at every size with Electron's Chromium and writes build/icon.png. */
 async function main() {
 const svg = fs.readFileSync(path.join(ROOT, "app-seed/app/public/icon.svg"));
 const win = new BrowserWindow({ show: false, webPreferences: { sandbox: true } });

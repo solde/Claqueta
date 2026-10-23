@@ -8,6 +8,10 @@ import * as A from "./actions.mjs";
 import { alerts, dashboard } from "./alerts.mjs";
 import { applyTemplate, cloneBudget, newBudgetVersion } from "./logic.mjs";
 import * as F from "./files.mjs";
+import * as M from "./memoir.mjs";
+import * as MEDIA from "./media.mjs";
+import { GRAPHIC_TYPES, renderGraphic } from "./docs/graphics.mjs";
+import { brandRowFor, svgToPng } from "./docs/render.mjs";
 import * as J from "./jobs.mjs";
 import { clientDict, normLang } from "./i18n/index.mjs";
 import { listSources } from "./docs/datasets.mjs";
@@ -20,8 +24,10 @@ import { resolveBrand } from "./docs/brand.mjs";
 import { runSource } from "./docs/datasets.mjs";
 import { HttpError, bad, forbidden, notFound, readJson, readRaw, send, today, csvRows, slug } from "./util.mjs";
 
-const routes = [];
-const on = (method, path, fn) => routes.push({ method, re: new RegExp("^" + path.replace(/:(\w+)/g, "(?<$1>[^/]+)") + "/?$"), fn });
+/** Registered routes: { method, path (with :params), re, fn }. Exported so docs/API.md can be generated from them. */
+export const routes = [];
+/** Registers a route; `:name` segments become named capture groups handed to the handler as `params`. */
+const on = (method, path, fn) => routes.push({ method, path, re: new RegExp("^" + path.replace(/:(\w+)/g, "(?<$1>[^/]+)") + "/?$"), fn });
 const query = (url) => Object.fromEntries(url.searchParams.entries());
 const num = (v) => { const n = Number(v); if (!Number.isInteger(n) || n < 1) throw notFound(); return n; };
 const filtersOf = (qs) => Object.fromEntries(Object.entries(qs).filter(([k]) => k.startsWith("f.")).map(([k, v]) => [k.slice(2), v]));
@@ -52,8 +58,15 @@ on("GET", "/api/activity", (ctx, req, res, p, url) => ok({ activity: E.activity(
 // ---- files ---------------------------------------------------------------------------------------------------------------------------
 on("POST", "/api/files", async (ctx, req, res, p, url) => { const qs = query(url); const buf = await readRaw(req, F.MAX_FILE + 1024); return created(F.addFile(ctx, { entity: qs.entity, id: num(qs.id), name: qs.name || "file", mime: String(req.headers["content-type"] || "").split(";")[0], buffer: buf, shared: qs.shared === "1", label: qs.label || "" })); });
 on("POST", "/api/links", async (ctx, req) => { const b = await readJson(req); return created(F.addLink(ctx, { entity: b.entity, id: num(b.id), url: b.url, label: b.label, shared: !!b.shared })); });
-on("GET", "/api/files/:id", (ctx, req, res, p, url) => { const f = F.readFile(ctx, num(p.id)); const inline = url.searchParams.get("inline") === "1" && /^(image\/(png|jpeg|gif|webp)|application\/pdf)$/.test(f.mime); return raw(f.buffer, f.mime, f.name, inline); });
+on("GET", "/api/files/:id", async (ctx, req, res, p, url) => { if (url.searchParams.get("thumb") === "1" || url.searchParams.get("max")) { F.assertCanRead(ctx, num(p.id)); const im = await MEDIA.imageFor(num(p.id), Math.max(64, Math.min(2400, Number(url.searchParams.get("max")) || 480))); if (im) return { status: 200, raw: im.buffer, type: im.mime, headers: { "cache-control": "private, max-age=3600", "x-content-type-options": "nosniff" } }; } const f = F.readFile(ctx, num(p.id)); const inline = url.searchParams.get("inline") === "1" && /^(image\/(png|jpeg|gif|webp)|application\/pdf)$/.test(f.mime); return raw(f.buffer, f.mime, f.name, inline); });
 on("DELETE", "/api/files/:id", (ctx, req, res, p) => ok(F.removeFile(ctx, num(p.id))));
+
+// ---- gallery and graphics ---------------------------------------------------------------------------------------------------------------
+on("POST", "/api/media", async (ctx, req, res, p, url) => { const qs = query(url); const buf = await readRaw(req, F.MAX_FILE + 1024); const fields = {}; for (const k of ["episode_id", "title", "kind", "phase", "caption", "alt_text", "credit", "shot_date", "location_id", "people", "rights", "rights_note", "featured"]) if (qs[k] !== undefined) fields[k] = qs[k];
+  return created(await MEDIA.addMedia(ctx, { program_id: num(qs.program), name: qs.name || "imagen", buffer: buf, origin: qs.origin === "agent" ? "agent" : "upload", ...fields })); });
+on("GET", "/api/graphics/types", () => ok({ types: Object.entries(GRAPHIC_TYPES).map(([type, g]) => ({ type, label: g.label, spec: g.spec, example: g.example })) }));
+on("POST", "/api/graphics/render", async (ctx, req) => { const b = await readJson(req); const brand = resolveBrand(brandRowFor(ctx, b.brand_id) || {}); const g = await renderGraphic(ctx, b.spec, { brand, lang: b.lang || ctx.lang }); if (b.png) { const dbg = {}; const png = await svgToPng(g.svg, Math.min(2400, g.width * 2), { debug: dbg }); return ok({ ...g, png_base64: png ? png.toString("base64") : "", ...(png ? {} : { png_error: dbg.error || "unknown" }) }); } return ok(g); });
+on("POST", "/api/graphics/save", async (ctx, req) => { const b = await readJson(req, 12e6); if (!b.program_id) throw bad("program_required"); return created(await MEDIA.saveGraphic(ctx, { ...b, program_id: num(b.program_id), origin: b.origin === "agent" ? "agent" : "generated" })); });
 
 // ---- dashboard, alerts, notifications --------------------------------------------------------------------------------------------------
 on("GET", "/api/dashboard", (ctx, req, res, p, url) => ok(dashboard(ctx, { program: url.searchParams.get("program") })));
@@ -62,16 +75,22 @@ on("GET", "/api/notifications", (ctx) => ok({ ...E.list(ctx, "notifications", { 
 on("POST", "/api/notifications/read", async (ctx, req) => { const b = await readJson(req); if (b.all) q.run("UPDATE notifications SET read = 1 WHERE user = ?", ctx.user); else for (const id of b.ids || []) q.run("UPDATE notifications SET read = 1 WHERE user = ? AND id = ?", ctx.user, Number(id)); return ok({ ok: true }); });
 
 // ---- reports -------------------------------------------------------------------------------------------------------------------------
-const REPORTS = {
+/** Read-only computations served at GET /api/reports/:name (they run with the caller's permissions). */
+export const REPORTS = {
   budget: (ctx, p) => R.budgetReport(ctx, { budget_id: num(p.budget) }), "episode-variance": (ctx, p) => R.episodeVariance(ctx, { program_id: num(p.program), season_id: p.season }), cashflow: (ctx, p) => R.cashflow(ctx, { program: p.program, from: p.from, months: p.months, forecast: p.forecast === "1" }),
   tax: (ctx, p) => R.taxReport(ctx, p), profitability: (ctx, p) => R.profitability(ctx, p), conflicts: (ctx, p) => ({ conflicts: R.conflicts(ctx, p) }), "check-slot": (ctx, p) => R.checkSlot(ctx, p), timesheets: (ctx, p) => R.timesheetReport(ctx, { ...p, person_id: p.person, program_id: p.program }),
-  rundown: (ctx, p) => R.rundownTiming(ctx, { episode_id: num(p.episode) }), gantt: (ctx, p) => R.gantt(ctx, { program_id: num(p.program), season_id: p.season }), ratings: (ctx, p) => R.ratingsSummary(ctx, { program_id: num(p.program), season_id: p.season }),
+  rundown: (ctx, p) => R.rundownTiming(ctx, { episode_id: num(p.episode) }), gantt: (ctx, p) => R.gantt(ctx, { program_id: num(p.program), season_id: p.season }), ratings: (ctx, p) => R.ratingsSummary(ctx, { program_id: num(p.program), season_id: p.season }), forecast: (ctx, p) => R.audienceForecast(ctx, { program_id: num(p.program), target: p.target, weeks: p.weeks, scenario: p.date ? { date: p.date, time: p.time, kind: p.kind } : null }),
+  "memoir-brief": (ctx, p) => M.brief(ctx, num(p.memoir)), "memoir-facts": (ctx, p) => M.facts(ctx, num(p.program)), "memoir-catalog": (ctx, p) => M.catalog(String(p.lang || ctx.lang || "es").slice(0, 2)),
   "rights-check": (ctx, p) => R.rightsCheck(ctx, { episode_id: num(p.episode) }), "delivery-readiness": (ctx, p) => R.deliveryReadiness(ctx, { episode_id: num(p.episode), spec_id: p.spec }),
 };
 on("GET", "/api/reports/:name", (ctx, req, res, p, url) => { const fn = REPORTS[p.name]; if (!fn) throw notFound(); return ok(fn(ctx, query(url))); });
 
 // ---- actions ---------------------------------------------------------------------------------------------------------------------------
-const ACTIONS = {
+/** Business operations served at POST /api/actions/:name (each checks its own permission). */
+export const ACTIONS = {
+  "memoir-create": async (ctx, b) => { if (!has(ctx, "app.edit")) throw forbidden("needs:app.edit"); return M.createMemoir(ctx, { ...b, program_id: num(b.program_id), lang: ctx.lang }); },
+  "memoir-section": async (ctx, b) => { if (!has(ctx, "app.edit")) throw forbidden("needs:app.edit"); return M.saveSection(ctx, { ...b, memoir_id: num(b.memoir_id) }); },
+  "memoir-build": async (ctx, b) => { if (!has(ctx, "app.edit")) throw forbidden("needs:app.edit"); return M.buildMemoir(ctx, num(b.memoir_id)); },
   "apply-template": async (ctx, b) => { if (!has(ctx, "app.edit")) throw forbidden("needs:app.edit"); return applyTemplate(ctx, num(b.program_id)); },
   "clone-budget": async (ctx, b) => { if (!has(ctx, "fin.edit")) throw forbidden("needs:fin.edit"); return cloneBudget(ctx, num(b.budget_id), { program_id: b.program_id, season_id: b.season_id, name: b.name, kind: b.kind, version: b.version }); },
   "budget-version": async (ctx, b) => { if (!has(ctx, "fin.edit")) throw forbidden("needs:fin.edit"); return newBudgetVersion(ctx, num(b.budget_id)); },
@@ -128,6 +147,7 @@ on("POST", "/api/docs/xlsx", async (ctx, req) => {
   return { status: 200, raw: buffer, type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers: { "content-disposition": `attachment; filename="${slug(b.filename || sheets[0].name || "datos")}.xlsx"` } };
 });
 
+/** Dispatches a request to the first registered route that matches method and path; JSON results are sent with their status, raw results as files. Unknown routes are 404. */
 export async function handle(ctx, req, res, url) {
   for (const r of routes) {
     if (r.method !== req.method) continue; const m = r.re.exec(url.pathname); if (!m) continue;

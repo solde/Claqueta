@@ -18,7 +18,7 @@ description: Estudios de audiencia, targets y competencia para televisión, radi
 ## Targets y personas
 Principal y secundarios: demografía, geografía, nivel socioeconómico (si procede), intereses, **hábitos de consumo y dispositivos**, necesidades, barreras, canales para llegar. 3-5 **personas** (ficha breve con nombre ficticio, motivaciones, qué le haría volver o irse). Termina con una tabla resumen. Marca qué es dato y qué es hipótesis.
 
-## Datos de medición en Collado
+## Datos de medición en Claqueta
 - Importa el CSV de la medición: `collado-api action import-ratings '{"program_id":N,"csv":"<contenido>"}'` (columnas: fecha, audiencia media, cuota, rating, cobertura, target, fuente; opcional episodio). Con `"dry":true` valida sin guardar.
 - `collado-api report ratings program=N` → serie, medias, mejor/peor emisión y por temporada. Plantilla `audience-report` (gráfico de cuota + tabla + lectura).
 

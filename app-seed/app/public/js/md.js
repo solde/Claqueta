@@ -1,5 +1,6 @@
 // Tiny safe Markdown renderer for comments and agent outputs (escape first, then a few inline/blocks rules). The document engine does the real work on the server.
 import { esc } from "./dom.js";
+/** A small safe Markdown renderer (escape first, then a few block and inline rules) for comments and agent output; the document engine on the server does the real work. */
 export function md(src) {
   const lines = String(src ?? "").replace(/\r/g, "").split("\n"); const out = []; let list = null, code = null;
   const inline = (s) => esc(s).replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/(^|[\s(])\*([^*\s][^*]*)\*/g, "$1<em>$2</em>").replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>').replace(/(^|\s)@([a-z][a-z0-9._-]{1,31})/g, '$1<span class="nb-badge nb-badge--blue">@$2</span>');

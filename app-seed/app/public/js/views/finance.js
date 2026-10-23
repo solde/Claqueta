@@ -9,6 +9,7 @@ import { registerDetail } from "../detail.js";
 import { barChart, hbars, PAL } from "../charts.js";
 
 const sch = (e) => S.schema.entities[e]; const has = (p) => S.me.perms.includes("*") || S.me.perms.includes(p);
+/** Asks the server for an Excel export of a data source and downloads it. */
 export async function downloadXlsx(source, params, filename, extra = {}) {
   const res = await api.raw("POST", "api/docs/xlsx", { source, params, filename, ...extra }); const blob = await res.blob(); const a = h("a", { href: URL.createObjectURL(blob), download: `${filename || source}.xlsx` }); document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 800);
 }
@@ -58,6 +59,7 @@ registerDetail("client_invoices", async (row, refs, { reload }) => {
 
 // ---- cashflow ---------------------------------------------------------------------------------------------------------------------------------
 async function programSelect(cur, onChange) { const r = await api.get("api/e/programs?limit=200&sort=name&refs=0"); return h("div.nb-selectwrap", { style: { maxWidth: "260px" } }, h("select.nb-select", { "aria-label": entName("programs"), onchange: (e) => onChange(e.target.value) }, h("option", { value: "" }, t("all_programs")), r.rows.map((p) => h("option", { value: p.id, selected: String(p.id) === String(cur) }, p.name)))); }
+/** Cash-flow page: receipts, payments and forecast by month. */
 export async function cashflowPage(root, m, params) {
   let program = params.get("program") || "", months = 6, forecast = false; const body = h("div");
   const opts = h("div.nb-row", { style: { marginBottom: "16px" } }, await programSelect(program, (v) => { program = v; draw(); }), h("div.nb-selectwrap", { style: { maxWidth: "160px" } }, h("select.nb-select", { onchange: (e) => { months = Number(e.target.value); draw(); }, "aria-label": t("months") }, [3, 6, 12, 18].map((n) => h("option", { value: n, selected: n === months }, `${n} ${t("months")}`)))), h("label.nb-check", h("input", { type: "checkbox", onchange: (e) => { forecast = e.target.checked; draw(); } }), t("include_forecast")), btn("Excel", { ico: "download", kind: "secondary", sm: true, onclick: () => downloadXlsx("cashflow", { program, months, forecast: forecast ? "1" : "" }, "cashflow") }));
@@ -68,7 +70,7 @@ export async function cashflowPage(root, m, params) {
     body.replaceChildren(h("div.stats", [["c-green", fmt.money(r.totals.in), t("cash_in")], ["c-red", fmt.money(r.totals.out), t("cash_out")], ["c-blue", fmt.money(r.buckets.at(-1)?.balance ?? 0), t("final_balance")]].map(([c, v, l]) => h("div", { class: ["stat", c] }, h("b", v), h("span", l)))),
       card([barChart({ rows: r.buckets.map((b) => ({ label: fmt.month(b.month), values: [b.in, b.out] })), series: [t("cash_in"), t("cash_out")], money: true, colors: ["var(--nb-green)", "var(--nb-red)"] }), barChart({ rows: r.buckets.map((b) => ({ label: fmt.month(b.month), values: [b.balance] })), series: [t("balance")], type: "line", money: true, height: 200, colors: ["var(--nb-blue)"] })], { head: ch("money", t("nav_cashflow")) }),
       h("div.nb-table-wrap", { style: { marginTop: "16px" } }, h("table.nb-table", h("thead", h("tr", ["month", "cash_in", "cash_out", "net", "balance"].map((k, i) => h("th", { class: i ? "num" : "" }, t(k === "month" ? "month" : k))))), h("tbody", r.buckets.map((b) => h("tr", h("td", fmt.month(b.month)), h("td.num", fmt.money(b.in)), h("td.num", fmt.money(b.out)), h("td.num", fmt.money(b.net)), h("td.num", h("b", fmt.money(b.balance)))))))),
-      h("h3", { style: { margin: "24px 0 8px" } }, t("details")), h("ul.alertlist", r.details.slice(0, 80).map((d) => h("li", badge(d.actual ? "✓" : "~", d.actual ? "green" : "yellow", "nb-badge--sq"), h("span.nb-caption", fmt.date(d.date)), KIND[d.kind] ? h("a", { href: d.kind === "payment" ? "#/e/payments/" + d.id : `#/e/${d.entity}/${d.id}` }, d.label) : h("span", d.label), h("b.nb-mono", { style: { marginLeft: "auto" } }, fmt.money(d.amount))))));
+      h("h3", { style: { margin: "24px 0 8px" } }, t("details")), h("ul.alertlist", r.details.slice(0, 80).map((d) => h("li", badge(icon(d.actual ? "ok" : "clock"), d.actual ? "green" : "yellow", "nb-badge--sq"), h("span.nb-caption", fmt.date(d.date)), KIND[d.kind] ? h("a", { href: d.kind === "payment" ? "#/e/payments/" + d.id : `#/e/${d.entity}/${d.id}` }, d.label) : h("span", d.label), h("b.nb-mono", { style: { marginLeft: "auto" } }, fmt.money(d.amount))))));
   }
   draw();
 }

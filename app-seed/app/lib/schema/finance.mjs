@@ -1,6 +1,7 @@
 // Module D (+ commercial) — budgets (versions), actual costs, purchase orders, invoicing, payments, bank reconciliation, grants, sponsorship.
 import { f, req, finSensitive } from "./dsl.mjs";
 
+/** The budget chapters, in the order they are reported. */
 export const CHAPTERS = ["development", "script", "artistic", "technical", "studios", "equipment", "location", "postproduction", "music_rights", "insurance", "travel", "marketing", "overheads", "contingency", "other"];
 
 export default {

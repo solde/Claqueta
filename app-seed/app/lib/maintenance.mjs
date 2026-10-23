@@ -5,6 +5,7 @@ import { alerts } from "./alerts.mjs";
 import { sweepFiles } from "./files.mjs";
 import { today, addDays, log } from "./util.mjs";
 
+/** Date-driven housekeeping of the current organization: expires contracts and rights, deletes old read notifications, notifies each editor of their high alerts. */
 export function runMaintenance() {
   const t = today();
   const a = q.run("UPDATE contracts SET status = 'expired', rev = rev + 1 WHERE status = 'active' AND end_date != '' AND end_date < ? AND auto_renew = 0", t).changes;
@@ -20,4 +21,5 @@ export function runMaintenance() {
 }
 /** Housekeeping of every organization, each in its own database. */
 async function runAll(withFiles) { for (const slug of listOrgSlugs()) { try { await inOrg(slug, () => { runMaintenance(); if (withFiles) sweepFiles(); }); } catch (e) { log("maintenance:", slug, e.message); } } }
+/** Schedules maintenance five seconds after start and every six hours (file sweep only on the first run). */
 export function startMaintenance() { setTimeout(() => runAll(true), 5000).unref(); setInterval(() => runAll(false), 6 * 3600e3).unref(); }

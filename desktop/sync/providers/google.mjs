@@ -1,13 +1,16 @@
 // Google Drive (REST v3). Scope drive.file: Collado can only see the files it created itself, never the rest of the Drive. Everything lives in one folder ("Collado").
 import { send, NAME_OK, HttpError } from "./http.mjs";
 
+/** OAuth endpoints and scope for Google Drive (drive.file: the app only sees the files it created). */
 export const GOOGLE = { authUrl: "https://accounts.google.com/o/oauth2/v2/auth", tokenUrl: "https://oauth2.googleapis.com/token", scope: "https://www.googleapis.com/auth/drive.file", extra: { access_type: "offline", prompt: "consent" } };
 const FOLDER = "application/vnd.google-apps.folder", SIMPLE_MAX = 5 * 1048576;
 
+/** Storage in one "Collado" folder of Google Drive (REST v3), with simple and resumable uploads. */
 export class GoogleDriveProvider {
   constructor({ tokens, folderName = "Collado", apiBase = "https://www.googleapis.com", fetchImpl = fetch }) { Object.assign(this, { tokens, folderName, apiBase, fetchImpl }); this.id = "google"; this.label = "Google Drive"; this.ids = new Map(); this.folderId = null; }
   #req(url, init, expect) { return send({ fetchImpl: this.fetchImpl, tokens: this.tokens, url, init, expect }); }
   #json = async (url, init, expect) => (await this.#req(url, init, expect)).json();
+  /** Finds or creates the folder. */
   async init() {
     const q = `name='${this.folderName}' and mimeType='${FOLDER}' and trashed=false and 'root' in parents`;
     const found = await this.#json(`${this.apiBase}/drive/v3/files?${new URLSearchParams({ q, fields: "files(id,name)", pageSize: "1" })}`);
@@ -18,6 +21,7 @@ export class GoogleDriveProvider {
     const j = await this.#json(`${this.apiBase}/drive/v3/files?${new URLSearchParams({ q: `name='${name}' and '${this.folderId}' in parents and trashed=false`, fields: "files(id)", pageSize: "1" })}`);
     const id = j.files?.[0]?.id || null; if (id) this.ids.set(name, id); return id;
   }
+  /** Map of object name to size. */
   async list() {
     const out = new Map(); this.ids.clear(); let page = "";
     do {
@@ -27,11 +31,13 @@ export class GoogleDriveProvider {
     } while (page);
     return out;
   }
+  /** Content of an object, or null. */
   async read(name) {
     const id = await this.#idOf(name); if (!id) return null;
     const r = await this.#req(`${this.apiBase}/drive/v3/files/${id}?alt=media`, {}, [200, 404]); if (r.status === 404) { this.ids.delete(name); return null; }
     return Buffer.from(await r.arrayBuffer());
   }
+  /** Creates or replaces an object. */
   async write(name, buf) {
     const id = await this.#idOf(name), meta = id ? {} : { name, parents: [this.folderId] };
     if (buf.length <= SIMPLE_MAX) {   // multipart/related: metadata + media in one request
@@ -44,5 +50,6 @@ export class GoogleDriveProvider {
     const done = await send({ fetchImpl: this.fetchImpl, auth: false, url: session, init: { method: "PUT", headers: { "content-length": String(buf.length) }, body: buf }, expect: [200, 201] });
     this.ids.set(name, (await done.json()).id);
   }
+  /** Deletes an object (nothing happens when it does not exist). */
   async remove(name) { const id = await this.#idOf(name); if (!id) return; await this.#req(`${this.apiBase}/drive/v3/files/${id}`, { method: "DELETE" }, [200, 204, 404]); this.ids.delete(name); }
 }

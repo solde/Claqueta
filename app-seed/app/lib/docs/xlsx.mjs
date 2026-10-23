@@ -8,7 +8,8 @@ const colName = (n) => { let s = ""; n++; while (n > 0) { const m = (n - 1) % 26
 const serial = (iso) => { const t = Date.parse(String(iso).length === 10 ? iso + "T00:00:00Z" : iso); return Number.isNaN(t) ? null : t / 864e5 + 25569; };
 const SYMBOL = { EUR: "€", USD: "$", GBP: "£" };
 
-export function buildXlsx({ title = "", author = "Collado", sheets, brand = {}, lang = "es", currency = "EUR" }) {
+/** Writes an Excel workbook from typed sheets: brand header row, number/money/date formats, SUM totals, frozen header and auto filter. No external library. */
+export function buildXlsx({ title = "", author = "Claqueta", sheets, brand = {}, lang = "es", currency = "EUR" }) {
   const prim = hexNoHash(brand.primary || "#1f3a5f"), stripe = hexNoHash(brand.table_stripe || "#f4f6f8"), ink = readable(brand.table_head_bg || brand.primary || "#1f3a5f") === "#ffffff" ? "FFFFFF" : "111111";
   const font = X(brand.font_body || "Calibri");
   const xfs = [{ numFmt: 0, font: 0, fill: 0, border: 0, align: "" }]; const xfKey = new Map([["0|0|0|0|", 0]]);

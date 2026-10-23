@@ -2,8 +2,9 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
+import { spawnSync, spawn } from "node:child_process";
 
+/** The in-window self test run by `npm run desktop:smoke`: real checks of the whole stack inside the Electron window (login, files, render service, sync, memoirs, CLI tools...), each reported as ok or FAIL with its details. */
 export async function runChecks(win, { renderUrl, renderKey, outDir, lastOpened, appUrl, dataDir, user, tools }) {
   const page = (code) => win.webContents.executeJavaScript(`(async () => { ${code} })()`);
   const results = [];
@@ -46,12 +47,27 @@ export async function runChecks(win, { renderUrl, renderKey, outDir, lastOpened,
     const id = /#\/p\/(\d+)/.exec(body)?.[1];
     return { ok: /# Proyecto: Proyecto con carpeta/.test(body) && /collado-doc check --program \d+/.test(body) && body.includes(projectDir) && body.includes("Claqueta") && !body.includes("{{") && !!id, id, size: body.length };
   });
+  await check("svg -> png: brand graphics", async () => { const out = {}; for (const k of ["kpi", "quote", "divider", "cover", "chart", "org"]) { const f = path.join(outDir, `g-${k}.svg`); if (!fs.existsSync(f)) continue; const r = await fetch(`${renderUrl}/svg-png?width=1200`, { method: "POST", headers: { "x-render-key": renderKey }, body: fs.readFileSync(f) }); out[k] = r.status === 200 ? (await r.arrayBuffer()).byteLength : (await r.text()).slice(0, 200); } const viaApp = await page(`const J = { "content-type": "application/json", "x-requested-with": "collado" }; const r = await fetch("/app/api/graphics/render", { method: "POST", headers: J, body: JSON.stringify({ spec: { type: "kpi_bars", title: "Metas", items: [{ label: "Capítulos", target: 3, achieved: 3 }, { label: "Audiencia", target: 100, achieved: 80, unit: "k" }] }, png: true }) }); const j = await r.json(); return { status: r.status, png: (j.png_base64 || "").length, w: j.width, err: j.error };`); return { ok: Object.values(out).every((v) => typeof v === "number" && v > 2000) && viaApp.png > 1000, out, viaApp }; });
   await check("collado-doc check: runs against the live app (as the agent would) and reports this machine's toolbox", async () => {
     const id = /#\/p\/(\d+)/.exec(fs.readFileSync(path.join(projectDir, "CLAUDE.md"), "utf8"))?.[1], token = path.join(dataDir, "homes", user, ".collado", "token");
     const r = spawnSync(process.execPath, [path.join(tools, "collado-doc.mjs"), "check", "--json", "--program", id], { encoding: "utf8", env: { ...process.env, ELECTRON_RUN_AS_NODE: "1", COLLADO_API: appUrl, COLLADO_TOKEN_FILE: token }, timeout: 60000 });
     let j; try { j = JSON.parse(r.stdout); } catch { return { ok: false, status: r.status, out: (r.stdout + r.stderr).slice(0, 300) }; }
     const by = Object.fromEntries(j.results.map((x) => [x.id, x]));
     return { ok: j.platform === process.platform && by.pdf?.ok && /Chromium/.test(by.pdf.detail) && by.folder?.ok && by.folder.detail === projectDir && ["preview", "office", "python", "pymods"].every((k) => by[k] && typeof by[k].ok === "boolean" && (by[k].ok || /\S/.test(by[k].install))) && typeof j.max_quality === "boolean", exit: r.status, missing: j.missing_recommended };
+  });
+  await check("collado-doc memoir/media/graphic: the agent's commands work against the live app (create, write sections, graphics to the gallery, images, assemble)", async () => {
+    const id = /#\/p\/(\d+)/.exec(fs.readFileSync(path.join(projectDir, "CLAUDE.md"), "utf8"))?.[1], token = path.join(dataDir, "homes", user, ".collado", "token"), env = { ...process.env, ELECTRON_RUN_AS_NODE: "1", COLLADO_API: appUrl, COLLADO_TOKEN_FILE: token };
+    // asynchronous on purpose: this process also hosts the render service the command calls (a blocking spawn would starve it)
+     const cli = (...a) => new Promise((res) => { const c = spawn(process.execPath, [path.join(tools, "collado-doc.mjs"), ...a], { env, cwd: outDir }); let stdout = "", stderr = ""; c.stdout.on("data", (d) => { stdout += d; }); c.stderr.on("data", (d) => { stderr += d; }); const t = setTimeout(() => c.kill(), 60000); c.on("close", (status) => { clearTimeout(t); res({ status, stdout, stderr, out: stdout + stderr }); }); });
+    const made =  await cli("memoir", "new", "--program", id, "--kind", "client", "--title", "Informe CLI", "--funder", "Canal Demo"); let memo; try { memo = JSON.parse(made.stdout); } catch { return { ok: false, step: "new", out: made.out.slice(0, 300) }; }
+    fs.writeFileSync(path.join(outDir, "sec.md"), "El proyecto entregó **tres** capítulos. ".repeat(30)); fs.writeFileSync(path.join(outDir, "campos.json"), JSON.stringify({ one_liner: "Tres capítulos entregados", highlights: [{ text: "A tiempo" }] }));
+    const w =  await cli("memoir", "write", String(memo.id), "exec_summary", path.join(outDir, "sec.md"), "--fields", path.join(outDir, "campos.json")), show =  await cli("memoir", "show", String(memo.id));
+    fs.writeFileSync(path.join(outDir, "g.json"), JSON.stringify({ type: "kpi_bars", title: "Metas", items: [{ label: "Capítulos", target: 3, achieved: 3 }, { label: "Audiencia", target: 100, achieved: 80, unit: "k" }] }));
+    const g =  await cli("graphic", "render", path.join(outDir, "g.json"), "-o", path.join(outDir, "g.png")), gs =  await cli("graphic", "save", path.join(outDir, "g.json"), "--program", id, "--title", "Metas CLI", "--caption", "Metas y logros");
+    const ml =  await cli("media", "list", "--program", id), types =  await cli("graphic", "types"), cat =  await cli("memoir", "catalog");
+    const ma = await cli("media", "add", path.join(outDir, "g.png"), "--program", id, "--title", "Gráfico CLI", "--caption", "Subida desde la consola", "--credit", "Agente", "--kind", "graphic"), mset = await cli("media", "set", String((JSON.parse(ma.stdout || "{}")).media_id || 0), "--caption", "Pie editado", "--featured", "1"), ml2 = await cli("media", "list", "--program", id);
+    const built =  await cli("memoir", "build", String(memo.id)), png = fs.existsSync(path.join(outDir, "g.png")) ? fs.readFileSync(path.join(outDir, "g.png")) : Buffer.alloc(0);
+    return { ok: w.status === 0 && /exec_summary/.test(w.stdout) && /exec_summary\s+draft\s+100/.test(show.stdout) && /DATOS REALES/.test(show.stdout) && g.status === 0 && png.length > 3000 && png[0] === 0x89 && gs.status === 0 && /Metas CLI/.test(ml.stdout) && /kpi_bars/.test(types.stdout) && /exec_summary/.test(cat.stdout) && ma.status === 0 && mset.status === 0 && /Pie editado/.test(ml2.stdout) && built.status === 0 && /document_id/.test(built.stdout), w: w.out.slice(0, 160), show: show.stdout.slice(0, 200), g: g.out.slice(0, 160), built: built.out.slice(0, 160), png: png.length };
   });
   await check("agent environment: the shell session has the workspace variables and its own Claude config dir, with the real HOME", () => page(String.raw`return await new Promise((res) => { const ws = new WebSocket("ws://" + location.host + "/_gw/ws/term?session=shell&cols=200&rows=30"); ws.binaryType = "arraybuffer"; let out = ""; const dec = new TextDecoder(), ESC = String.fromCharCode(27), BEL = String.fromCharCode(7);
     const clean = (x) => x.split(ESC + "]").map((part, i) => (i ? part.slice(part.indexOf(BEL) + 1) : part)).join("").replace(new RegExp(ESC + "\\[[0-9;?]*[ -/]*[@-~]", "g"), "").replace(/\r/g, "");
@@ -125,12 +141,66 @@ export async function runChecks(win, { renderUrl, renderKey, outDir, lastOpened,
       return { none: [none.status, (await none.json()).error], dup: (await dup.json()).error, inner: (await inner.json()).error, rel: (await rel.json()).error, changed: u.folder, empty: empty.status, card: /Cambiar carpeta/.test(txt) && txt.includes(${JSON.stringify(moved)}) };`);
     return { ok: r.none[0] === 400 && /^required/.test(r.none[1]) && /^folder_in_use/.test(r.dup) && /^folder_overlaps/.test(r.inner) && r.rel === "folder_not_absolute" && r.changed === moved && r.empty === 400 && r.card && fs.existsSync(second) && fs.existsSync(moved), ...r };
   });
+  await check("audience forecast: the section opens for a programme with measurements and shows a forecast, the next audience and the what-if", async () => {
+    const r = await page(`
+      try {
+      const H = { "content-type": "application/json", "x-requested-with": "collado" }, post = async (e, b) => (await fetch("/app/api/e/" + e, { method: "POST", headers: H, body: JSON.stringify(b) })).json();
+      const pr = await post("programs", { name: "Predicción", folder: ${JSON.stringify(path.join(outDir, "prediccion"))} }), day = (i) => new Date(Date.UTC(2026, 0, 5 + 7 * i)).toISOString().slice(0, 10);
+      for (let i = 0; i < 9; i++) { const b = await post("broadcasts", { program_id: pr.id, date: day(i), start_time: "22:00", kind: i % 3 ? "premiere" : "repeat", status: "aired" }); await post("ratings", { program_id: pr.id, broadcast_id: b.id, date: day(i), audience_avg: 1500 - i * 55 + (i % 2) * 70, share_pct: 10 - i * 0.3, target_label: "Total individuos" }); }
+      const f = document.getElementById("appframe"); location.hash = "#/app"; await new Promise((r) => setTimeout(r, 500)); f.contentWindow.location.hash = "#/forecast?program=" + pr.id; await new Promise((r) => setTimeout(r, 2500));
+      const d = f.contentDocument, txt = d.body.innerText, svgs = d.querySelectorAll("svg.chart").length, bands = d.querySelectorAll(".fc-band").length;
+      return { ok: /Predicción de audiencias/.test(txt) && /Simular una emisión/.test(txt) && svgs === 2 && bands === 2 && !/NaN|undefined|\\[object/.test(txt), svgs, bands, head: txt.slice(0, 160) };
+      } catch (e) { return { ok: false, error: String(e && e.stack || e) }; }`);
+    await shot("forecast.png"); await page(`document.getElementById("appframe").contentWindow.location.hash = "#/"; 0`); return r;
+  });
+  await check("memoirs: gallery with uploaded and generated images, a memoir edited section by section, assembled into a document, all pages render", async () => {
+    const r = await page(`
+      try {
+      const J = { "content-type": "application/json", "x-requested-with": "collado" }, post = async (e, b) => (await fetch("/app/api/e/" + e, { method: "POST", headers: J, body: JSON.stringify(b) })).json(), act = async (n, b) => (await fetch("/app/api/actions/" + n, { method: "POST", headers: J, body: JSON.stringify(b) })).json();
+      const png = (color, label) => new Promise((res) => { const c = document.createElement("canvas"); c.width = 1200; c.height = 800; const g = c.getContext("2d"); g.fillStyle = color; g.fillRect(0, 0, 1200, 800); g.fillStyle = "rgba(255,255,255,.85)"; g.beginPath(); g.arc(850, 300, 190, 0, 7); g.fill(); g.fillStyle = "#fff"; g.font = "700 90px sans-serif"; g.fillText(label, 70, 700); c.toBlob(res, "image/png"); });
+      const pr = await post("programs", { name: "Memoria de prueba", folder: ${JSON.stringify(path.join(outDir, "memoria"))}, genre: "Magazine", logline: "Un magazine de cultura" }), day = (i) => new Date(Date.UTC(2026, 2, 2 + 7 * i)).toISOString().slice(0, 10);
+      for (let i = 0; i < 4; i++) { const e = await post("episodes", { program_id: pr.id, number: i + 1, title: "Capítulo " + (i + 1), duration_target: 3000, shoot_date: day(i), air_date: day(i + 2), status: "delivered" }); const b = await post("broadcasts", { program_id: pr.id, episode_id: e.id, date: day(i + 2), start_time: "22:00", kind: "premiere", status: "aired" }); await post("ratings", { program_id: pr.id, broadcast_id: b.id, date: day(i + 2), audience_avg: 900 + i * 40, share_pct: 8 + i * 0.4, target_label: "Total" }); }
+      await post("locations", { program_id: pr.id, name: "Plató 1", city: "Barcelona", country: "España", lat: 41.39, lng: 2.17, shoot_days: 5 }); await post("locations", { program_id: pr.id, name: "Playa de Sitges", city: "Sitges", country: "España", lat: 41.23, lng: 1.81, shoot_days: 2 });
+      const up = [["#1f3a5f", "Plató"], ["#2f9e73", "Equipo"], ["#d1495b", "Final"]];
+      for (const [i, [col, lab]] of up.entries()) { const blob = await png(col, lab); await fetch("/app/api/media?program=" + pr.id + "&name=" + lab + ".png&caption=" + encodeURIComponent("Imagen de " + lab) + "&credit=Ana%20Ruiz&kind=" + (i ? "behind_scenes" : "photo") + "&featured=" + (i === 0 ? 1 : 0), { method: "POST", headers: { "x-requested-with": "collado" }, body: blob }); }
+      const gen = await (await fetch("/app/api/graphics/save", { method: "POST", headers: J, body: JSON.stringify({ program_id: pr.id, title: "El programa en cifras", caption: "Cifras clave", spec: { type: "stats", auto: 1, program: pr.id, title: "El programa en cifras" } }) })).json();
+      const memo = await act("memoir-create", { program_id: pr.id, kind: "subsidy", funder: "Departament de Cultura", funder_ref: "EXP-2026-14" });
+      await act("memoir-section", { memoir_id: memo.id, key: "exec_summary", body: "El magazine produjo **cuatro capítulos** de 50 minutos, rodados en dos localizaciones y emitidos en prime time con una cuota media del 8,6 %.", fields: { one_liner: "Cuatro capítulos de cultura emitidos en prime time", highlights: [{ text: "Cuatro capítulos entregados" }, { text: "Cuota media del 8,6 %" }] } });
+      await act("memoir-section", { memoir_id: memo.id, key: "objectives", fields: { objectives: [{ objective: "Entregar 4 capítulos", indicator: "Capítulos", target: 4, achieved: 4, unit: "ud" }, { objective: "Audiencia media", indicator: "Miles", target: 1000, achieved: 960, unit: "k" }] } });
+      const rows = (await (await fetch("/app/api/e/media_items?f.program_id=" + pr.id + "&limit=20&refs=0", { headers: { "x-requested-with": "collado" } })).json()).rows;
+      await act("memoir-section", { memoir_id: memo.id, key: "gallery", media_ids: rows.map((x) => x.id).slice(0, 4), fields: { layout: "mosaic" } });
+      const built = await act("memoir-build", { memoir_id: memo.id });
+      const f = document.getElementById("appframe"); location.hash = "#/app"; await new Promise((r) => setTimeout(r, 500));
+      const visit = async (h, ms) => { f.contentWindow.location.hash = h; await new Promise((r) => setTimeout(r, ms || 2500)); return f.contentDocument.body.innerText; };
+      const gal = await visit("#/gallery?program=" + pr.id), galImgs = f.contentDocument.querySelectorAll(".gal__item img").length;
+      window.__shots = { gallery: true }; 
+      return { ok: true, ids: { program: pr.id, memo: memo.id, doc: built.document_id }, galOk: /Galería/.test(gal), galImgs, gen: gen.id, built };
+      } catch (e) { return { ok: false, error: String(e && e.stack || e) }; }`);
+    if (!r.ok) return r;
+    await shot("gallery.png");
+    const nav = (hash, ms = 2800) => page(`const f = document.getElementById("appframe"); f.contentWindow.location.hash = ${JSON.stringify(hash)}; await new Promise((r) => setTimeout(r, ${ms})); const d = f.contentDocument; return { text: d.body.innerText, imgs: d.querySelectorAll("img").length, loaded: [...d.querySelectorAll("img")].filter((i) => i.complete && i.naturalWidth > 0).length };`);
+    const memo = await nav("#/memoir/" + r.ids.memo); await shot("memoir.png");
+    await page(`const f = document.getElementById("appframe"); [...f.contentDocument.querySelectorAll(".memoir__link")].find((b) => /Objetivos/.test(b.textContent))?.click(); await new Promise((r) => setTimeout(r, 1500)); 0`); await shot("memoir-objectives.png");
+    const docp = await nav("#/doc/" + r.ids.doc, 3500); await shot("memoir-doc.png");
+    const list = await nav("#/memoirs?program=" + r.ids.program); await shot("memoirs.png");
+    await page(`const f = document.getElementById("appframe"); f.contentWindow.location.hash = "#/gallery?program=${r.ids.program}"; await new Promise((r) => setTimeout(r, 1500)); [...f.contentDocument.querySelectorAll("button")].find((b) => /Crear gráfico/.test(b.textContent))?.click(); await new Promise((r) => setTimeout(r, 2500)); 0`); await shot("graphic-dialog.png");
+    await page(`const f = document.getElementById("appframe"); f.contentDocument.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); [...f.contentDocument.querySelectorAll(".nb-close")].forEach((b) => b.click()); f.contentWindow.location.hash = "#/"; 0`);
+    const rend = await page(`const J = { "content-type": "application/json", "x-requested-with": "collado" }; const h = await (await fetch("/app/api/docs/render", { method: "POST", headers: J, body: JSON.stringify({ document_id: ${r.ids.doc}, format: "html" }) })).text(); const p = await fetch("/app/api/docs/render", { method: "POST", headers: J, body: JSON.stringify({ document_id: ${r.ids.doc}, format: "pdf" }) }); const pdf = p.ok ? (await p.arrayBuffer()).byteLength : -1; const d = await fetch("/app/api/docs/render", { method: "POST", headers: J, body: JSON.stringify({ document_id: ${r.ids.doc}, format: "docx" }) }); const hs = await (await fetch("/app/api/docs/render", { method: "POST", headers: J, body: JSON.stringify({ document_id: ${r.ids.doc}, format: "html", screen: true }) })).text(); return { screenHtml: hs, html: h.length, gallery: /class="gallery/.test(h), chart: /<figure class="chart"><svg/.test(h), funder: h.includes("Departament de Cultura"), caption: h.includes("Imagen de Plató"), pdf, docx: d.ok ? (await d.arrayBuffer()).byteLength : -1, htmlText: h };`);
+    fs.writeFileSync(path.join(outDir, "memoria.html"), rend.htmlText); fs.writeFileSync(path.join(outDir, "memoria-screen.html"), rend.screenHtml);
+    { const { BrowserWindow } = await import("electron"); const w = new BrowserWindow({ show: false, width: 1000, height: 1000, webPreferences: { offscreen: false } }); await w.loadFile(path.join(outDir, "memoria-screen.html")); await new Promise((res) => setTimeout(res, 800)); const total = await w.webContents.executeJavaScript("document.documentElement.scrollHeight"); for (let i = 0; i * 1000 < Math.min(total, 9000); i++) { await w.webContents.executeJavaScript(`window.scrollTo(0, ${i * 1000})`); await new Promise((res) => setTimeout(res, 250)); fs.writeFileSync(path.join(outDir, `memoria-${i}.png`), (await w.webContents.capturePage()).toPNG()); } w.destroy(); }
+    const bad = /NaN|undefined|\[object/;
+    return { ok: r.galImgs === 4 && r.galOk && /Resumen ejecutivo/.test(memo.text) && /Objetivos/.test(memo.text) && !bad.test(memo.text) && /Memoria de prueba|Justificación/.test(list.text) && Object.assign(globalThis, { __rend: { gallery: rend.gallery, chart: rend.chart, funder: rend.funder, caption: rend.caption } }) && rend.gallery && rend.chart && rend.funder && rend.caption && rend.pdf > 20000 && rend.docx > 8000 && !bad.test(rend.htmlText.replace(/data:image[^"]*/g, "")), galImgs: r.galImgs, render: { html: rend.html, pdf: rend.pdf, docx: rend.docx, gallery: rend.gallery, chart: rend.chart, funder: rend.funder, caption: rend.caption }, built: r.built };
+  });
   await check("claude login (automatic): the endpoints exist, report idle and not logged in for a fresh workspace", () => page(`const s = await (await fetch("/_gw/api/agent/login/status")).json(); return { ok: s.state === "idle" && s.logged_in === false, s };`));
   await check("the app server (a worker thread of the hub) restarts cleanly on demand and comes back healthy with its data", () => page(`
     const H = { "x-requested-with": "collado" }; const before = await (await fetch("/app/api/e/programs?limit=1")).json();
     const r = await fetch("/_gw/api/service/restart", { method: "POST", headers: H }); if (!r.ok) return { ok: false, step: "restart", status: r.status };
     let healthy = false; for (let i = 0; i < 60 && !healthy; i++) { await new Promise((x) => setTimeout(x, 500)); try { healthy = (await (await fetch("/_gw/api/service/status")).json()).app.healthy === true; } catch { /* still down */ } }
     const after = await (await fetch("/app/api/e/programs?limit=1")).json(); return { ok: healthy && (after.total ?? after.rows?.length) === (before.total ?? before.rows?.length), healthy, before: before.total, after: after.total };`));
+  await check("top bar: no Preguntar button nor app-running indicator; the organization menu lists real entries (no [object ...])", () => page(`
+    const hidden = (id) => { const e = document.getElementById(id); return !e || e.hidden || getComputedStyle(e).display === "none"; };
+    const b = document.getElementById("org-btn"); if (b.hidden) return { ok: hidden("ask") && hidden("led"), note: "no org button" }; b.click(); await new Promise((r) => setTimeout(r, 300));
+    const pop = document.getElementById("orgpop").innerText; b.click(); return { ok: hidden("ask") && hidden("led") && hidden("tour-btn") && !/object|HTML/.test(pop) && /Gestionar organizaciones/.test(pop), pop: pop.replace(/\s+/g, " ") };`));
   await check("claude login status: a fresh workspace is NOT logged in, even when the user is logged in elsewhere on this Mac (own config dir, real HOME)", () => page(`const r = await (await fetch("/_gw/api/agent/login-status")).json(); return { ok: r.logged_in === false, r };`));
   await check("claude login helper: a link that Claude Code hard-wraps over several rows is read back whole", () => page(String.raw`
     const U = "https://claude.com/cai/oauth/authorize?code=true&client_id=9d1c250a-e61b-44d9-88ed-5944d1962f5e&response_type=code&redirect_uri=https%3A%2F%2Fplatform.claude.com%2Foauth%2Fcode%2Fcallback&scope=org%3Acreate_api_key+user%3Aprofile+user%3Ainference&code_challenge=u6bEdLRQic--1rC&code_challenge_method=S256&state=boBAe37wXB0lZkrVeKuir0yahCEgTgRwi0gUlPCQnoQ";
@@ -144,15 +214,15 @@ export async function runChecks(win, { renderUrl, renderKey, outDir, lastOpened,
     return { ok: document.documentElement.dataset.skin === "neu" && fd.documentElement.dataset.skin === "neu" && sheets(document) && sheets(fd) && surf(document) === "14px" && surf(fd) === "14px", shell: document.documentElement.dataset.skin, frame: fd.documentElement.dataset.skin };`));
   await check("single-person UI: tabs are Proyectos/Archivos/Log/Organizaciones, no user administration", () => page(`
     const tabs = [...document.querySelectorAll("#tabs a")].map((a) => a.textContent.trim());
-    location.hash = "#/service"; await new Promise((r) => setTimeout(r, 1800));
+    document.getElementById("menu").click(); await new Promise((r) => setTimeout(r, 300)); [...document.querySelectorAll("#menupop button")].find((b) => b.textContent.trim() === "Log")?.click(); await new Promise((r) => setTimeout(r, 1800));
     const logPane = document.getElementById("pane-service").innerText, buttons = [...document.querySelectorAll("#pane-service button")].map((b) => b.textContent.trim());
     location.hash = "#/orgs"; await new Promise((r) => setTimeout(r, 1000)); const orgs = document.getElementById("pane-orgs").innerText;
     location.hash = "#/admin"; await new Promise((r) => setTimeout(r, 600)); const viaUrl = location.hash, adminShown = !document.getElementById("pane-admin").hidden || document.getElementById("pane-admin").childElementCount > 0;
     location.hash = "#/service"; await new Promise((r) => setTimeout(r, 800));
-    const ok = JSON.stringify(tabs) === JSON.stringify(["Proyectos", "Archivos", "Log", "Organizaciones"]) && /^log/i.test(logPane) && !/servicio|git/i.test(logPane) && buttons.length === 1 && buttons[0] === "Reiniciar la app" && !/Usuarios/.test(orgs) && !adminShown;
+    const ok = JSON.stringify(tabs) === JSON.stringify(["Proyectos", "Archivos", "Organizaciones"]) && /^log/i.test(logPane) && !/servicio|git/i.test(logPane) && buttons.length === 1 && buttons[0] === "Reiniciar la app" && !/Usuarios/.test(orgs) && !adminShown;
     const menuBtn = document.getElementById("menu"); menuBtn.click(); await new Promise((r) => setTimeout(r, 300));
     const items = [...document.querySelectorAll("#menupop button")].map((b) => b.textContent.trim()), pop = document.getElementById("menupop").innerText; menuBtn.click();
-    const menuOk = menuBtn.textContent.trim() === "⚙ Configuración" && !/false|undefined|null/.test(pop) && !pop.includes(${JSON.stringify(process.env.USER || "usuario")}) && !items.some((i) => /contraseña|dos pasos|Cerrar sesión/.test(i)) && items.some((i) => /Idioma|Castellano/.test(i)) && items.some((i) => /tema/i.test(i)) && items.some((i) => /Recorrido/.test(i));
+    const menuOk = menuBtn.textContent.trim() === "Configuración" && !/false|undefined|null/.test(pop) && !pop.includes(${JSON.stringify(process.env.USER || "usuario")}) && !items.some((i) => /contraseña|dos pasos|Cerrar sesión/.test(i)) && items.some((i) => /Idioma|Castellano/.test(i)) && items.some((i) => /tema/i.test(i)) && items.some((i) => /recorrido/i.test(i)) && items.includes("Log");
     return { ok: ok && menuOk, tabs, buttons, viaUrl, adminShown, menu: menuBtn.textContent.trim(), items };`));
   return results;
 }

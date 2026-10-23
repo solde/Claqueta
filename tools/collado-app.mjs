@@ -3,6 +3,7 @@
 // (restart/rollback/reset/logs need the service.manage permission: only people who can change the code can run them)
 import { ctl, fail } from "./client.mjs";
 const [cmd = "status", arg] = process.argv.slice(2);
+/** One-line summary of the app's state. */
 const show = (s) => console.log(`app: ${s.app.state}${s.app.healthy ? " (sana)" : ""} · pid ${s.app.pid ?? "-"} · reinicios ${s.app.restarts} · uptime ${s.app.uptime_s}s`);
 if (cmd === "status") show(await ctl("GET", "/status"));
 else if (cmd === "logs") console.log((await ctl("GET", `/logs?n=${+arg || 100}`)).lines.join("\n"));

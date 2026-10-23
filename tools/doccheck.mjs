@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 
+/** Name of the Python executable for this platform (COLLADO_PYTHON overrides). */
 export const pythonBin = () => process.env.COLLADO_PYTHON || (process.platform === "win32" ? "python" : "python3");
 const GENERIC_FONTS = /^(serif|sans-serif|monospace|cursive|fantasy|system-ui|ui-[a-z-]+|inherit|initial)$/i;
 
@@ -20,6 +21,7 @@ export function realProbes(platform = process.platform) {
 }
 
 const soffice = { darwin: ["/Applications/LibreOffice.app/Contents/MacOS/soffice"], win32: ["C:\\Program Files\\LibreOffice\\program\\soffice.exe", "C:\\Program Files (x86)\\LibreOffice\\program\\soffice.exe"], linux: [] };
+/** The install hint for this platform, falling back to Linux's. */
 const hint = (platform, h) => h[platform] || h.linux || "";
 const PY_MODULES = [["pptx", "python-pptx"], ["docx", "python-docx"], ["openpyxl", "openpyxl"], ["PIL", "pillow"], ["lxml", "lxml"]];
 
@@ -45,6 +47,9 @@ export function runChecks({ caps = {}, brands = [], program = null, probes = rea
   add({ id: "pymods", label: "Librerías de Python (python-pptx, python-docx, openpyxl, pillow, lxml)", level: "recommended", ok: pyOk && missing.length === 0, detail: !pyOk ? "requiere Python" : missing.length ? `faltan: ${missing.join(", ")}` : "todas instaladas",
     impact: "Faltan piezas para crear PowerPoint y Word/Excel a medida: propón PDF/Word estándar o instálalas.",
     install: `${py} -m pip install --user ${missing.length ? missing.join(" ") : PY_MODULES.map((x) => x[1]).join(" ")}    (si pip rechaza el entorno «gestionado»: usa un entorno virtual o pipx y define COLLADO_PYTHON con su python)` });
+  const ff = P.which(plat === "win32" ? "ffmpeg.exe" : "ffmpeg");
+  add({ id: "ffmpeg", label: "ffmpeg (fotogramas de vídeo para la galería, opcional)", level: "optional", ok: !!ff, detail: ff || "no encontrado", impact: "Sin él no puedes sacar fotogramas de los vídeos del proyecto con `collado-doc media frames` (sí puedes subir imágenes ya extraídas).",
+    install: hint(plat, { darwin: "brew install ffmpeg", win32: "winget install Gyan.FFmpeg   (o: scoop install ffmpeg)", linux: "sudo apt install ffmpeg" }) });
   add({ id: "pandoc", label: "pandoc (opcional)", level: "optional", ok: !!P.which("pandoc"), detail: P.which("pandoc") || "no encontrado", impact: "Solo para conversiones de formato poco habituales.", install: hint(plat, { darwin: "brew install pandoc", win32: "winget install JohnMacFarlane.Pandoc", linux: "sudo apt install pandoc" }) });
   // fonts of the brands: PDF/HTML embed uploaded fonts, Word and the previews need them installed
   const wanted = new Map(); for (const b of brands) for (const k of ["font_heading", "font_body"]) { const f = String(b[k] || "").split(",")[0].replace(/["']/g, "").trim(); if (f && !GENERIC_FONTS.test(f)) (wanted.get(f) || wanted.set(f, new Set()).get(f)).add(b.name); }
@@ -60,10 +65,12 @@ export function runChecks({ caps = {}, brands = [], program = null, probes = rea
   }
   return out;
 }
+/** Counts what is missing by level (required, recommended, optional) and says whether documents can reach maximum quality. */
 export function summarize(results) {
   const bad = (l) => results.filter((r) => !r.ok && r.level === l);
   return { ok: bad("required").length === 0, max_quality: results.every((r) => r.ok || r.level === "optional"), missing_required: bad("required").map((r) => r.id), missing_recommended: bad("recommended").map((r) => r.id) };
 }
+/** Human-readable report of the toolbox check with the exact install command per missing item. */
 export function formatReport(results, { platform = process.platform, app = "" } = {}) {
   const sys = { darwin: "macOS", win32: "Windows", linux: "Linux" }[platform] || platform, L = [`Herramientas para documentos${app ? ` · ${app}` : ""} · ${sys}`, ""];
   for (const r of results) {

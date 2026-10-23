@@ -1,1 +1,1 @@
-{ "name": "Collado", "short_name": "Collado", "start_url": "./", "scope": "./", "display": "standalone", "background_color": "#FFFBF0", "theme_color": "#F01E2C", "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }] }
+{ "name": "Claqueta", "short_name": "Claqueta", "start_url": "./", "scope": "./", "display": "standalone", "background_color": "#FFFBF0", "theme_color": "#F01E2C", "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }] }

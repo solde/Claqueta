@@ -2,9 +2,11 @@
 import { readFileRaw } from "../files.mjs";
 import { esc, str } from "./format.mjs";
 
+/** Page sizes in millimetres (portrait). */
 export const PAGE_MM = { A4: [210, 297], A3: [297, 420], Letter: [215.9, 279.4], Legal: [215.9, 355.6] };
+/** The default brand kit (colours, fonts, page layout, cover, header/footer texts) every missing value of a brand falls back to. */
 export const DEFAULT_BRAND = {
-  name: "Collado", primary: "#C8102E", accent: "#1C1F24", text_color: "#1c1f24", muted: "#5b6472", bg: "#ffffff", table_head_bg: "", table_stripe: "#f4f6f8",
+  name: "Claqueta", primary: "#C8102E", accent: "#1C1F24", text_color: "#1c1f24", muted: "#5b6472", bg: "#ffffff", table_head_bg: "", table_stripe: "#f4f6f8",
   font_heading: "Inter", font_body: "Inter", font_mono: "DejaVu Sans Mono", base_size: 10.5, line_height: 1.45, logo_height_mm: 14, page_size: "A4", orientation: "portrait", margin_mm: { top: 27, right: 20, bottom: 22, left: 20 },
   cover: "band", header_text: "{{brand}} · {{title}}", footer_text: "{{confidentiality}} · {{date}}", page_numbers: 1, heading_numbering: 0, watermark: "", confidentiality: "Confidencial", legal_footer: "", custom_css: "",
 };
@@ -35,6 +37,7 @@ function marginContent(tpl, b, lang, meta) {
   lit(tpl.slice(last)); return parts.length ? parts.join(" ") : '""';
 }
 
+/** The complete stylesheet of a document for a brand: fonts, colours, tables, callouts, columns, galleries, cover variants and paged-media rules (@page, running headers) for PDF, or screen styles for the preview. */
 export function brandCss(b, { lang = "es", meta = {}, forScreen = true } = {}) {
   const [pw, ph] = pageDims(b), m = b.margin_mm, prim = b.primary, acc = b.accent, ink = b.text_color, muted = b.muted;
   const thead = b.table_head_bg || prim, theadInk = readable(thead);
@@ -79,6 +82,7 @@ dl.kv{display:table;width:100%;margin:.6em 0} dl.kv>div{display:table-row} dl.kv
 .pagebreak{break-after:page;height:0} .landscape{page:landscape}
 .toc{margin:1em 0 1.4em} .toc h2{border:0} .toc ol{list-style:none;padding:0;margin:0} .toc li{margin:.25em 0} .toc li.l3{margin-left:1.2em} .toc li.l4{margin-left:2.4em}
 .toc a{text-decoration:none;color:${ink}} .toc a::after{content:leader('.') target-counter(attr(href), page);color:${muted}}
+.gallery{display:grid;gap:3mm;margin:.9em 0} .gallery.pairs{grid-template-columns:1fr 1fr} .gallery.grid3{grid-template-columns:repeat(3,1fr)} .gallery.hero{grid-template-columns:1fr} .gallery figure.ph{margin:0;break-inside:avoid;text-align:left} .gallery.logos{display:flex;flex-wrap:wrap;gap:8mm;align-items:center} .gallery.logos figure.ph{text-align:center} .gallery img{display:block;border-radius:1.2mm} .gallery figcaption{margin-top:1.2mm} .gallery .credit{opacity:.75;font-size:.9em} .gallery-intro{color:${muted};margin:.4em 0}
 .chart{margin:.9em 0;break-inside:avoid;text-align:center} .chart svg{max-width:100%;height:auto}
 .legal-footer{margin-top:2em;font-size:.78rem;color:${muted};border-top:.6pt solid ${muted};padding-top:.5em}
 .cover{page:cover;break-after:page;width:${pw}mm;height:${ph}mm;position:relative;overflow:hidden;padding:${m.top + 6}mm ${m.right}mm ${m.bottom}mm ${m.left}mm;margin:0}
@@ -96,4 +100,5 @@ ${String(b.custom_css || "").replace(/<\/?style/gi, "")}`;
 }
 /** Black or white, whichever reads better on `hex`. */
 export function readable(hex) { const h = String(hex || "#000").replace("#", ""); const f = h.length === 3 ? h.split("").map((c) => c + c).join("") : h.padEnd(6, "0"); const [r, g, bl] = [0, 2, 4].map((i) => parseInt(f.slice(i, i + 2), 16)); return 0.299 * r + 0.587 * g + 0.114 * bl > 150 ? "#111111" : "#ffffff"; }
+/** Six-digit upper-case hex of a colour without the leading # (the form Word and Excel files need). */
 export const hexNoHash = (c) => String(c || "000000").replace("#", "").slice(0, 6).toUpperCase().padEnd(6, "0");

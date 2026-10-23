@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// agentd: runs in the "workbench" container. Listens ONLY on 127.0.0.1 and trusts nobody by network position: the gateway authenticates with INTERNAL_KEY, the app with a
+// agentd, the control daemon behind the gateway: system users, consoles, the supervisor of the app, file operations and agent jobs (in the desktop build it runs inside the hub process). Listens ONLY on 127.0.0.1 and trusts nobody by network position: the gateway authenticates with INTERNAL_KEY, the app with a
 // derived key, console users with signed tokens that carry their own permissions. It owns:
 //   1. one persistent Claude Code console per person (a real system user with its own /home/<user> and Claude login when running as root)
 //   2. the supervisor of the editable app ($DATA/app), installed/upgraded from the image seed with a git merge
@@ -30,6 +30,7 @@ const SEED = env.SEED_DIR || "/opt/app-seed", WORK_SEED = env.WORKSPACE_SEED || 
 const D = { app: DESKTOP ? path.join(SEED, "app") : path.join(DATA, "app"), appdata: path.join(DATA, "appdata"), shared: path.join(DATA, "shared"), backups: path.join(DATA, "app-backups") };
 const STATE = path.join(DATA, "state"), HOMES = env.HOMES_DIR || (ROOT ? "/home" : path.join(DATA, "homes"));
 const APP_PORT = Number(env.APP_PORT || 3000), PORT = Number(env.AGENTD_PORT || 8081);
+/** Timestamped console log line. */
 const log = (...a) => console.log(new Date().toISOString(), ...a);
 
 const keys = internalKeys(env.INTERNAL_KEY || env.AGENTD_KEY);
@@ -56,6 +57,7 @@ if (ROOT) { try { for (const f of fs.readdirSync(D.shared)) fs.chmodSync(path.jo
 
 // ---- control API ------------------------------------------------------------------------------------------------------------------------
 const json = (res, code, obj) => { res.writeHead(code, { "content-type": "application/json" }); res.end(JSON.stringify(obj)); };
+/** Reads a request body as text with a size cap. */
 const readBody = (req, max = 2e6) => new Promise((res, rej) => { let b = ""; req.on("data", (c) => { b += c; if (b.length > max) { rej(new Error("too large")); req.destroy(); } }); req.on("end", () => res(b)); });
 /** Who is calling: "gateway" | "app" | { user, perms } | null. */
 function who(req) {
@@ -63,15 +65,22 @@ function who(req) {
   const k = req.headers["x-collado-key"]; if (k) return safeEqual(k, keys.gateway) ? "gateway" : safeEqual(k, keys.app) ? "app" : null;
   const m = /^Bearer (.+)$/.exec(req.headers.authorization || ""); if (!m) return null; return verifyToken(keys.token, m[1]);
 }
+/** Permissions of the caller: the ones the gateway or app vouches for, or the ones signed in a person's token. */
 const permsOf = (w, body) => (w === "gateway" || w === "app" ? body.perms || [] : w.perms);
+/** Organization the request is about (only the gateway may name one). */
 const orgOf = (w, body, url) => (w === "gateway" ? body.org || url.searchParams.get("org") || null : null);
+/** The person the request is about: named by the gateway/app, or the owner of the token. */
 const userOf = (w, body, url) => (w === "gateway" || w === "app" ? body.user || url.searchParams.get("user") : w.user);
+/** Whether the caller holds a permission (the gateway holds all of them). */
 const has = (w, body, p) => w === "gateway" || (typeof w === "object" && w.perms.includes(p));
+/** Which sessions (claude, shell) a user has alive. */
 const myConsole = (u) => ({ claude: consoles.hasSession(u, "claude"), shell: consoles.hasSession(u, "shell") });
+/** Status for the service view: the app, the user's consoles, mode (desktop, users, shared-uid) and number of users. */
 const status = (u) => ({ app: sup.status(), console: u ? myConsole(u) : {}, mode: DESKTOP ? "desktop" : ROOT ? "users" : "shared-uid", users: ROOT ? users.list().length : undefined });
 /** Is this person logged in to Claude Code? Only the answer of `claude auth status` (or, without it, the EXISTENCE of the credentials file) is used, never the credentials themselves.
  *  Desktop: the login lives in the keychain (macOS) under a name derived from the person's config dir, so the CLI is the only reliable judge. Cached for a few seconds (the tutorial polls). */
 const loginCache = new Map();
+/** Whether the person's Claude Code is logged in (cached; `fresh` re-checks). */
 async function claudeLoggedIn(name, fresh = false) {
   const u = users.get(name); if (!u) return false; if (fresh) loginCache.delete(name);
   const file = () => { try { return fs.statSync(path.join(users.homeOf(name), ".claude", ".credentials.json")).size > 0; } catch { return false; } };
@@ -153,6 +162,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 const wss = new WebSocketServer({ noServer: true, maxPayload: 1 << 20 });
+/** A number limited to [lo, hi], or the default when it is not valid. */
 const clamp = (v, lo, hi, d) => (Number.isFinite(v) && v >= lo ? Math.min(v, hi) : d);
 wss.on("connection", (ws, req, url) => {
   const name = url.searchParams.get("user"), session = url.searchParams.get("session") === "shell" ? "shell" : "claude";
@@ -177,6 +187,7 @@ server.on("upgrade", (req, socket, head) => {
 setInterval(() => consoles.reap(), (DESKTOP ? 1 : 10) * 60e3).unref();
 setInterval(() => { for (const u of consoles.active()) users.refreshToken(u); }, 6 * 3600e3).unref();
 server.listen(PORT, "127.0.0.1", () => { log(`agentd on 127.0.0.1:${PORT}; app dir ${D.app}; mode ${DESKTOP ? "desktop" : ROOT ? "one system user per person" : "single uid (development)"}`); if (!DESKTOP) sup.watch(); sup.start(); });
+/** Stops the app (and the consoles in the desktop build) and exits. */
 const shutdown = async () => { sup.s.want = false; await sup.stop(); if (DESKTOP) consoles.killAll(); process.exit(0); };
 for (const sig of ["SIGTERM", "SIGINT"]) process.on(sig, shutdown);
 if (DESKTOP) { process.stdin.resume(); process.stdin.on("end", shutdown); process.stdin.on("error", shutdown); }   // the desktop program closes our stdin to ask for a clean stop (works on Windows, and when it crashes)

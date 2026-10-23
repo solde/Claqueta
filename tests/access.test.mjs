@@ -1,3 +1,4 @@
+// Unit tests of identity and permissions (app/lib/access.mjs, token.mjs): which caller a request resolves to in production and in development, and where the organization comes from.
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";

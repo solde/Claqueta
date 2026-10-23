@@ -1,3 +1,4 @@
+// Unit tests of per-project folders in the desktop build: validation (required, absolute, unique, not nested), exports copied into the folder, and the automatic Claude login.
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";

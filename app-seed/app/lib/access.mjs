@@ -9,6 +9,7 @@ const APP_KEY = process.env.APP_KEY || "", TOKEN_KEY = process.env.COLLADO_TOKEN
 /** Production: both keys are set and every API call must prove who it is. Development/tests: no keys, headers (or nothing) are trusted as before. */
 export const STRICT = !!(APP_KEY || TOKEN_KEY);
 
+/** Builds the caller's context (user, permissions, organization, scope) from the request: gateway headers, a person's agent token, or the trusted local identity in development. */
 export function ctxFromReq(req) {
   const k = req.headers["x-collado-key"], bearer = /^Bearer (.+)$/.exec(req.headers.authorization || "");
   if (STRICT) {
@@ -32,6 +33,7 @@ function fromGateway(req) {
   let orgName = ""; try { orgName = decodeURIComponent(req.headers["x-collado-org-name"] || ""); } catch { /* keep empty */ }
   return { user: u, name, perms, roles, local: false, external: perms.has("external") && !perms.has("users.manage"), lang, org, orgName };
 }
+/** The context of code running inside the app itself (tests, jobs, the desktop build): the given user with every permission and no external scoping. */
 export const localCtx = (user = "agente") => ({ user, name: user, perms: new Set(PERMS), roles: ["agent"], local: true, external: false, lang: "", org: LEGACY_ORG, orgName: "" });
 
 const seen = new Map();
@@ -46,8 +48,11 @@ export function touchUser(ctx) {
   } catch { /* never block a request on this */ }
 }
 
+/** True when the caller holds `perm` (the local context holds all of them). */
 export const has = (ctx, perm) => ctx.local || ctx.perms.has(perm);
+/** Whether the caller may read an entity: module permission, and for external members only entities that declare `ext.read`. */
 export const canRead = (ctx, e) => e.module === "own" || (has(ctx, MODULES[e.module].view) && (!ctx.external || !!e.ext?.read));
+/** Whether the caller may create/update/delete rows of an entity (module permission; external members only where `ext.write` is declared). */
 export const canWrite = (ctx, e) => {
   if (e.module === "own") return true;
   if (ctx.external) return !!e.ext?.write;
@@ -55,11 +60,15 @@ export const canWrite = (ctx, e) => {
 };
 /** Field-level permission ({read, write} on the field definition). */
 export const canReadField = (ctx, fd) => !fd.perm?.read || has(ctx, fd.perm.read);
+/** Field-level write permission (`perm.write` on the field definition). */
 export const canWriteField = (ctx, fd) => !fd.perm?.write || has(ctx, fd.perm.write);
 
+/** Programme ids an external user belongs to (cached on the context); null for internal users, who see every programme. */
 export function memberPrograms(ctx) {
   if (!ctx.external) return null;
   return (ctx._programs ||= q.all("SELECT program_id FROM members WHERE username = ?", ctx.user).map((r) => r.program_id));
 }
+/** The membership row (permissions of an external member) for one programme, or undefined when the user is not a member. */
 export function memberInfo(ctx, programId) { return q.get("SELECT * FROM members WHERE username = ? AND program_id = ?", ctx.user, programId); }
+/** Entity definition by name (undefined when it does not exist). */
 export const entityOf = (name) => ENTITIES[name];

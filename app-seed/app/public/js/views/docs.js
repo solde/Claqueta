@@ -10,6 +10,7 @@ import { requestApproval } from "../detail.js";
 
 const sch = (e) => S.schema.entities[e]; const has = (p) => S.me.perms.includes("*") || S.me.perms.includes(p);
 
+/** Calls a document endpoint and returns the file with its warnings. */
 async function fetchBlob(path, body, name) { const res = await api.raw("POST", path, body); const blob = await res.blob(); const warn = res.headers.get("x-collado-warnings"); download(name, blob); try { const w = JSON.parse(decodeURIComponent(warn || "[]")); if (w.length) toast(t("doc_warnings", { n: w.length }), "warn"); } catch { /* ignore */ } }
 
 /** Template picker -> variables -> create editable document, or render straight to a file. */

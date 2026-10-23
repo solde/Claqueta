@@ -77,4 +77,4 @@ for i, s in enumerate(spec.get("slides", []), start=1):
     else:
         chrome(sl, s.get("title", ""), i); bullets(sl, Inches(0.8), Inches(1.6), Inches(11.7), Inches(5.2), s.get("bullets", []), 22)
     if s.get("notes"): sl.notes_slide.notes_text_frame.text = s["notes"]
-prs.core_properties.title = spec.get("title", ""); prs.core_properties.author = spec.get("author", "Collado"); prs.save(out); print(out)
+prs.core_properties.title = spec.get("title", ""); prs.core_properties.author = spec.get("author", "Claqueta"); prs.save(out); print(out)

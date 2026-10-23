@@ -5,7 +5,7 @@ description: Control de calidad (QC), especificaciones técnicas de entrega por 
 # Calidad y entrega
 
 ## Principio
-**La especificación vinculante es la de la cadena/cliente.** Las plantillas de Collado son orientativas: pide el documento técnico y refleja sus valores en `delivery_specs` (checklist incluida) antes del primer episodio.
+**La especificación vinculante es la de la cadena/cliente.** Las plantillas de Claqueta son orientativas: pide el documento técnico y refleja sus valores en `delivery_specs` (checklist incluida) antes del primer episodio.
 
 ## Referencias técnicas habituales (verifícalas con la cadena)
 - **Vídeo broadcast HD**: 1920×1080, 25p (o 50i heredado), Rec.709, contenedor MXF OP1a con XDCAM HD422 50 Mbps o el códec que pida la cadena; streaming/OTT: ProRes 422 HQ o H.264/H.265 de alto bitrate, UHD según plataforma.
@@ -13,7 +13,7 @@ description: Control de calidad (QC), especificaciones técnicas de entrega por 
 - **Subtítulos y accesibilidad**: fichero aparte (STL/SRT/XML/IMSC según cadena), subtitulado para personas sordas y audiodescripción si aplica; legibilidad (contraste, tiempos, posición).
 - **Nomenclatura**: la de la cadena (p. ej. `PROGRAMA_Exxx_vN`). Metadatos: título, episodio, duración, idioma, emisión, versión.
 
-## Flujo de calidad en Collado
+## Flujo de calidad en Claqueta
 1. **Material** (`assets`): título, tipo (raw/edit/master/audio/subtítulos…), versión, estado (`ingest → working → approved → archived`), **localización real** (NAS/nube/cinta/URL: la app no almacena el vídeo), códec, resolución, fps, duración, checksum, derecho asociado.
 2. **QC** (`qc_reports`): elige la especificación → aparece la **checklist** (OK / KO / N/A + nota); resultado `pass / pass_notes / fail`. Mide sonoridad y pico con herramienta real; **no declares «pass» sin medición**.
 3. **Incidencias** (`qc_issues`): severidad (`low…blocker`), código de tiempo, responsable, estado; las bloqueantes impiden dar por lista la entrega.

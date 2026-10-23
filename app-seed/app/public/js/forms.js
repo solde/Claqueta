@@ -4,14 +4,18 @@ import { api, entityApi, qs } from "./api.js";
 import { S, t, fieldLabel, optLabel, entName, errText, parseDuration, fmt } from "./i18n.js";
 import { btn, modal, toast, selectWrap, icon } from "./ui.js";
 
+/** Labels of rows seen so far, by entity and id. */
 export const refCache = {};            // entity -> { id: label }
+/** Adds the `refs` of an API response to the label cache. */
 export const remember = (refs) => { for (const [e, m] of Object.entries(refs || {})) Object.assign((refCache[e] ||= {}), m); };
+/** Label of a referenced row ("#id" when unknown). */
 export const refLabel = (entity, id) => (id ? refCache[entity]?.[id] ?? `#${id}` : "");
 const schemaOf = (e) => S.schema.entities[e];
 
 // ---- field widgets: each returns { el, get(), set(v), focus() } ---------------------------------------------------------------------------
 function labelEl(entity, fd, id) { return h("label.nb-label", { for: id }, fieldLabel(entity, fd.name), fd.required && h("span", { "aria-hidden": "true" }, " *")); }
 let uid = 0;
+/** The input for one field by type (text, long, number, money, date, enum, reference, boolean, tags, JSON, colour...): returns { el, get(), set(v), focus() }. */
 export function widget(entity, fd, value, o = {}) {
   const id = `f${++uid}`; const disabled = !fd.writable || o.readonly; const ph = o.placeholder || "";
   const base = { id, disabled, "aria-required": fd.required ? "true" : undefined, placeholder: ph };
@@ -51,6 +55,7 @@ export function widget(entity, fd, value, o = {}) {
   return { el, id, get, set, focus: () => (el.focusEl || el).focus?.(), fd };
 }
 
+/** Reference field: a select whose options (up to 300 rows of the target entity, honouring the field's filter) are loaded the first time it gets focus. */
 function refWidget(entity, fd, value, { id, disabled, defaults }) {
   const to = fd.to; let current = value || null; let items = null;
   const sel = h("select.nb-select", { id, disabled, "aria-required": fd.required ? "true" : undefined });
@@ -69,6 +74,7 @@ function refWidget(entity, fd, value, { id, disabled, defaults }) {
   if (current && !refCache[to]?.[current]) api.get(`api/e/${to}/${current}`, { silent: true }).then((r) => { const ent = schemaOf(to); (refCache[to] ||= {})[current] = labelFor(ent, r.row); fill(items || [{ id: current, label: refCache[to][current] }]); }).catch(() => {});
   return { el: wrap, id, get: () => (sel.value ? Number(sel.value) : null), set: (v) => { current = v || null; fill(items || (current ? [{ id: current, label: refLabel(to, current) }] : [])); }, focus: () => sel.focus(), fd, reload: () => { items = null; return load(); } };
 }
+/** Display label of a row from its entity's title fields. */
 export function labelFor(ent, row) {
   if (!ent) return `#${row.id}`;
   const parts = ent.title.map((k) => row[k]).filter((v) => v !== null && v !== undefined && v !== "");
@@ -105,6 +111,7 @@ export function formFields(entity, opts = {}) {
   return { el: root, widgets, collect, showError };
 }
 
+/** Collects a form and creates or updates the row (with the `rev` for concurrency); field errors are shown on the form. */
 export async function saveForm(entity, form, row, extra = {}) {
   let body; try { body = { ...form.collect(), ...extra }; } catch (e) { form.showError(e.message); throw e; }
   if (!row?.id) for (const fd of Object.values(schemaOf(entity).fields)) if (fd.required && fd.writable && (body[fd.name] === null || body[fd.name] === "" || body[fd.name] === undefined)) { if (!form.showError(`required:${fd.name}`)) toast(new Error(`required:${fd.name}`)); throw new Error(`required:${fd.name}`); }

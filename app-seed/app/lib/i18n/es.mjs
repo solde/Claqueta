@@ -14,9 +14,10 @@ export default {
     qc_reports: "Informe de QC|Control de calidad", qc_issues: "Incidencia|Incidencias", deliveries: "Entrega|Entregas", editorial_lines: "Línea editorial|Líneas editoriales", compliance_checks: "Verificación normativa|Cumplimiento normativo",
     broadcasts: "Emisión|Parrilla y emisiones", ratings: "Dato de audiencia|Audiencias", targets: "Target|Targets", competitors: "Competidor|Competencia", documents: "Documento|Documentos", doc_versions: "Versión|Versiones",
     brands: "Marca|Marcas e identidad", doc_templates: "Plantilla de documento|Plantillas de documento", exports: "Exportación|Exportaciones", jobs: "Generación|Generaciones del agente",
+    media_items: "Imagen|Galería de imágenes", locations: "Localización|Localizaciones", memoirs: "Memoria|Memorias de proyecto", memoir_sections: "Sección de memoria|Secciones de memoria",
   },
   g: { directory: "Directorio", settings: "Ajustes", programs: "Programas", planning: "Planificación", collab: "Colaboración", reports: "Informes", finance: "Finanzas", commercial: "Comercial", legal: "Contratos y derechos",
-    gdpr: "RGPD", content: "Material", quality: "Calidad y entrega", broadcast: "Emisión", audience: "Audiencias", docs: "Documentos", agent: "Agente" },
+    gdpr: "RGPD", content: "Material", quality: "Calidad y entrega", broadcast: "Emisión", audience: "Audiencias", docs: "Documentos", agent: "Agente", memoirs: "Memorias" },
   f: {
     accent: "Color de acento", accepted_at: "Aceptado el", sent_at: "Enviado el", sent_by: "Enviado por", account: "Cuenta contable", action: "Acción", active: "Activo", actual_end: "Fin real", actual_start: "Inicio real", address: "Dirección", age_range: "Franja de edad",
     agent_contact: "Contacto del representante", agent_name: "Representante", air_date: "Emisión", air_start: "Inicio de emisión", amount: "Importe", apply_by: "Solicitar antes de", approved: "Aprobado",
@@ -64,6 +65,7 @@ export default {
     true_peak: "Pico real", type: "Tipo", unit: "Unidad", unit_cost: "Coste unitario", updated: "Modificado", updated_by: "Modificado por", uri: "Ruta o enlace", usage: "Uso", user: "Usuario", username: "Usuario",
     valid_from: "Válida desde", valid_to: "Válida hasta", value: "Valor", variables: "Variables", vars: "Valores", vat: "IVA", vat_id: "NIF/CIF", vat_rate: "IVA (%)", version: "Versión", video_codec: "Códec de vídeo",
     watermark: "Marca de agua", web: "Web", window_end: "Fin de ventana", window_start: "Inicio de ventana",
+    phase: "Fase", caption: "Pie de foto", alt_text: "Texto alternativo", credit: "Autoría", shot_date: "Fecha de la toma", people: "Personas que aparecen", rights: "Derechos de uso", rights_note: "Nota de derechos", featured: "Destacada", width: "Ancho (px)", height: "Alto (px)", origin: "Origen", spec: "Especificación del gráfico", lat: "Latitud", lng: "Longitud", date_from: "Desde", date_to: "Hasta", shoot_days: "Días de rodaje", permit: "Permiso", contact: "Contacto", period_start: "Inicio del periodo", period_end: "Fin del periodo", funder: "Destinatario o financiador", funder_ref: "Referencia del expediente", audience_note: "Quién la lee", tone: "Tono", brief: "Instrucciones", built_at: "Generada el", fields: "Campos estructurados", media_ids: "Imágenes", visuals: "Gráficos", agent_brief: "Encargo al agente", cover_media_id: "Imagen de portada", location_id: "Localización",
   },
   fe: {
     "grants.body": "Organismo", "comments.body": "Comentario", "editorial_lines.body": "Texto", "doc_templates.body": "Contenido de la plantilla", "doc_templates.name": "Nombre", "episodes.number": "Nº",
@@ -107,6 +109,7 @@ export default {
     terminated: "Rescindido", theme: "Sintonía", todo: "Pendiente", transfer: "Transferencia", travel: "Viajes y dietas", tv: "Televisión", unavailable: "No disponible", url: "Enlace", validated: "Validado", vehicle: "Vehículo",
     vi: "VI · Visual instrumental", vital_interest: "Interés vital", voice: "Voz", void: "Anulada", vv: "VV · Visual vocal", wontfix: "No se corregirá", working: "En trabajo",
     paused: "En pausa", payroll: "Nómina", en: "Inglés", es: "Castellano", ca: "Catalán", A3: "A3", A4: "A4", Letter: "Carta", Legal: "Legal (EE. UU.)",
+    photo: "Fotografía", behind_scenes: "Detrás de las cámaras", screenshot: "Captura de pantalla", press: "Prensa", document: "Documento", preproduction: "Preproducción", promotion: "Promoción", owned: "Propia", licensed: "Con licencia", release_pending: "Autorización pendiente", upload: "Subida", agent: "Agente", generated: "Generada", exterior: "Exterior", interior: "Interior", remote: "Remota", subsidy: "Justificación de subvención", annual: "Memoria anual", season_close: "Cierre de temporada", writing: "En redacción", empty: "Vacía", skipped: "Omitida", institutional: "Institucional", narrative: "Narrativo",
   },
   oe: {
     "status.active": "Activo", "status.planned": "Planificado", "billing_plan.status.planned": "Prevista", "broadcasts.status.planned": "Prevista", "episodes.status.script": "Guion", "episodes.status.qc": "Control de calidad",

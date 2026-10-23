@@ -1,4 +1,4 @@
-/* Collado shell and login: legacy class names mapped to the neobrutalism kit (nb.css must be loaded first). Fonts and tokens come from nb.css; no CDN. */
+/* Claqueta shell and login: legacy class names mapped to the neobrutalism kit (nb.css must be loaded first). Fonts and tokens come from nb.css; no CDN. */
 :root {
   --bg: var(--nb-bg); --panel: var(--nb-surface); --panel-2: var(--nb-hover); --line: var(--nb-ink); --ink: var(--nb-ink); --ink-2: var(--nb-ink-soft);
   --accent: var(--nb-accent); --accent-ink: var(--nb-on); --ok: var(--nb-green); --warn: var(--nb-orange); --bad: var(--nb-error); --focus: var(--nb-focus);

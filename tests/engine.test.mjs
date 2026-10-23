@@ -1,3 +1,4 @@
+// Unit tests of the generic entity engine and business rules (app/lib/engine.mjs, logic.mjs): CRUD, money, secrets, permissions, budget locking, external scoping and workflows.
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";

@@ -1,4 +1,4 @@
-// Claqueta (Collado) desktop (macOS, Windows, Linux). Electron shell around the same three Node pieces that run in the pod, but on this computer and with no network:
+// Main process of the Claqueta desktop app (macOS, Windows, Linux): starts and supervises the local servers and shows the window. An Electron shell around the same three Node pieces that run in the pod, but on this computer and with no network:
 //   gateway (shell UI + auth/RBAC) ─► app (SPA + SQLite engine)         agentd (consoles with node-pty, file manager, supervisor of the app)
 // Each runs as a child process of this program (Electron's binary in "run as Node" mode), bound to 127.0.0.1 and protected by keys that exist only for this launch.
 // The window can only talk to those local servers: any other request is cancelled, so the program is offline by construction.
@@ -29,9 +29,13 @@ else if (fs.existsSync(legacyData) && !fs.existsSync(path.join(app.getPath("appD
 if (!app.requestSingleInstanceLock()) { app.quit(); process.exit(0); }
 
 const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
+/** Random hex string (keys that exist only for this launch). */
 const rand = (n = 32) => crypto.randomBytes(n).toString("hex");
+/** A free TCP port on 127.0.0.1. */
 const freePort = () => new Promise((res, rej) => { const s = net.createServer(); s.once("error", rej); s.listen(0, "127.0.0.1", () => { const { port } = s.address(); s.close(() => res(port)); }); });
+/** Promise that resolves after `ms` milliseconds. */
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+/** Polls a URL until it answers OK (or the time runs out); used to wait for each local server to be ready. */
 async function waitFor(url, ms = 90_000) {
   const t0 = Date.now();
   while (Date.now() - t0 < ms) { try { const r = await fetch(url, { signal: AbortSignal.timeout(1500) }); if (r.ok) return true; } catch { /* not yet */ } await sleep(250); }
@@ -46,6 +50,7 @@ function localUser() {
 
 const state = { cloud: null, busyWin: null, relaunched: false, homes: "", lastOpened: "", quitting: false, children: [], win: null, render: null, urls: null, logDir: "" };
 
+/** Starts one of the Node pieces (hub) as a child process of Electron in "run as Node" mode, with its output appended to a log file; if it exits unexpectedly the program stops with an error dialog. */
 function startChild(name, script, env) {
   const log = fs.createWriteStream(path.join(state.logDir, `${name}.log`), { flags: "a" });
   log.write(`\n==== ${new Date().toISOString()} start ${name}\n`);
@@ -54,11 +59,13 @@ function startChild(name, script, env) {
   child.once("exit", (code, sig) => { log.write(`==== exit code=${code} signal=${sig}\n`); log.end(); if (!state.quitting) fatal(`El componente «${name}» se ha detenido (código ${code ?? sig}).`); });
   state.children.push(child); return child;
 }
+/** Shows an error box with the log folder and quits (once). */
 function fatal(message) {
   if (state.quitting) return; state.quitting = true;
   dialog.showErrorBox(`${APP_NAME} se ha detenido`, `${message}\n\nRegistros: ${state.logDir}`);
   stopChildren().finally(() => app.exit(1));
 }
+/** Stops the render service and every child process: asks nicely by closing stdin (the portable way), then SIGTERM, then SIGKILL. */
 async function stopChildren() {
   state.render?.close();
   await Promise.all(state.children.map((c) => new Promise((res) => {
@@ -109,6 +116,7 @@ const cloudDefaults = () => {
   let f = {}; try { f = JSON.parse(fs.readFileSync(path.join(ROOT, "desktop", "cloud.config.json"), "utf8")); } catch { /* none */ }
   return { google: { clientId: process.env.COLLADO_GOOGLE_CLIENT_ID || f.google?.clientId || "", clientSecret: process.env.COLLADO_GOOGLE_CLIENT_SECRET || f.google?.clientSecret || "" }, microsoft: { clientId: process.env.COLLADO_MS_CLIENT_ID || f.microsoft?.clientId || "" } };
 };
+/** Shows or hides a small "working" window (used while the final cloud upload runs and the main window is gone). */
 function setBusy(text) {   // a small window while the final upload runs and the main window is gone
   if (!text) { state.busyWin?.destroy(); state.busyWin = null; return; }
   const html = `data:text/html;charset=utf-8,${encodeURIComponent(`<!doctype html><meta charset=utf-8><style>html,body{margin:0;height:100%;background:#1b1e25;color:#e8ebf1;font:14px system-ui,sans-serif}body{display:grid;place-items:center;text-align:center}</style><div><b>${APP_NAME}</b><p id=t></p></div>`)}`;
@@ -116,7 +124,9 @@ function setBusy(text) {   // a small window while the final upload runs and the
   const set = () => state.busyWin?.webContents.executeJavaScript(`document.getElementById("t").textContent=${JSON.stringify(text)}`).catch(() => {});
   if (state.busyWin.webContents.isLoading()) state.busyWin.webContents.once("did-finish-load", set); else set();
 }
+/** Changes the text of the start-up screen. */
 const splash = (text) => state.win?.webContents.executeJavaScript(`(document.querySelector("p")||{}).textContent=${JSON.stringify(text)}`).catch(() => {});
+/** Builds the cloud-sync controller with its host services: OS-keychain vault (or a plain one), system browser for the OAuth sign-in, confirm dialogs and the busy window. */
 function makeCloud(userData, dataDir, gwDir) {
   const vault = smoke || process.env.COLLADO_PLAIN_VAULT || !safeStorage.isEncryptionAvailable() ? new PlainVault() : { seal: (s) => safeStorage.encryptString(s), open: (b) => safeStorage.decryptString(b), strong: true };
   return new CloudSync({ appName: APP_NAME, paths: { userData, dataDir, gwDir, localUser: localUser() }, defaults: cloudDefaults(), log: (...a) => console.log("[cloud]", ...a),
@@ -125,6 +135,7 @@ function makeCloud(userData, dataDir, gwDir) {
       confirm: async (message, buttons, detail) => smoke ? 0 : (await dialog.showMessageBox(state.win && !state.win.isDestroyed() ? state.win : undefined, { type: "question", message, detail, buttons, defaultId: 0, cancelId: buttons.length - 1, noLink: true })).response,
       relaunch: () => { state.relaunched = true; if (!smoke) { app.relaunch(); app.quit(); } } } });
 }
+/** Maps a sync error to the { error, message } shape the page expects. */
 const cloudErr = (e) => ({ error: e?.code || "failed", message: e?.message && e.message !== e.code ? e.message : "" });
 ipcMain.handle("collado:cloud-status", (e) => (trusted(e) && state.cloud ? state.cloud.status() : null));
 ipcMain.handle("collado:cloud-connect", async (e, o) => {
@@ -138,6 +149,7 @@ ipcMain.handle("collado:cloud-sync", async (e) => { if (!trusted(e) || !state.cl
 
 // ---- updates: only when the person asks (menu Ayuda). Looks at the release page of the repository and opens the download in the browser ------------------------------------------------
 const updateConfig = () => { try { return JSON.parse(fs.readFileSync(path.join(ROOT, "desktop", "update.config.json"), "utf8")); } catch { return { host: "https://gitea.solde.cat", repo: "dsoldevila/claqueta-desktop" }; } };
+/** Manual "Check for updates": asks the releases page (only when the person asks), compares versions and offers the download for this system. */
 async function updateCheck() {
   const cfg = updateConfig(), r = await checkForUpdate({ ...cfg, current: app.getVersion(), platform: process.platform, arch: process.arch }), parent = state.win && !state.win.isDestroyed() ? state.win : undefined;
   const box = (o) => dialog.showMessageBox(parent, { noLink: true, ...o });
@@ -147,7 +159,9 @@ async function updateCheck() {
   if (x.response === 0) shell.openExternal(l.asset ? l.asset.url : l.page); else if (x.response === 1) shell.openExternal(l.page);
 }
 
+/** File where the window position and size are remembered. */
 const BOUNDS = () => path.join(app.getPath("userData"), "window.json");
+/** Creates the main window with the preload bridge, restoring its last bounds. */
 function createWindow() {
   let b = {}; try { b = JSON.parse(fs.readFileSync(BOUNDS(), "utf8")); } catch { /* first run */ }
   const win = new BrowserWindow({ width: b.width || 1360, height: b.height || 880, x: b.x, y: b.y, minWidth: 420, minHeight: 520, show: false, title: APP_NAME, backgroundColor: "#14161a",
@@ -160,6 +174,7 @@ function createWindow() {
   state.win = win; return win;
 }
 
+/** Application menu (the Help menu holds the update check; the developer tools only in development). */
 function buildMenu() {
   const dev = !app.isPackaged;
   const t = [
@@ -173,6 +188,7 @@ function buildMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(t));
 }
 
+/** Start-up sequence: pick data folders, start cloud sync (pull before anything opens), start the render service and the hub, wait for them, open the window logged in with a one-time nonce; in smoke-test mode runs the in-window checks and quits. */
 async function boot() {
   const userData = app.getPath("userData"), dataDir = path.join(userData, "data"), gwDir = path.join(userData, "gateway");
   state.homes = path.join(dataDir, "homes"); state.logDir = path.join(userData, "logs"); for (const d of [dataDir, gwDir, state.logDir]) fs.mkdirSync(d, { recursive: true });

@@ -1,4 +1,4 @@
-// English.
+// English labels: entities, groups, fields and option values (see es.mjs for the structure; ui.en.mjs has the interface texts).
 export default {
   e: {
     partners: "Organisation|Organisations", workflow_templates: "Workflow template|Workflow templates", programs: "Programme|Programmes", seasons: "Season|Seasons", episodes: "Episode|Episodes",
@@ -13,9 +13,10 @@ export default {
     qc_reports: "QC report|Quality control", qc_issues: "Issue|Issues", deliveries: "Delivery|Deliveries", editorial_lines: "Editorial line|Editorial lines", compliance_checks: "Compliance check|Regulatory compliance",
     broadcasts: "Broadcast|Schedule and airings", ratings: "Audience data|Audiences", targets: "Target|Targets", competitors: "Competitor|Competition", documents: "Document|Documents", doc_versions: "Version|Versions",
     brands: "Brand|Brands and identity", doc_templates: "Document template|Document templates", exports: "Export|Exports", jobs: "Generation|Agent generations",
+    media_items: "Image|Image gallery", locations: "Location|Locations", memoirs: "Memoir|Project memoirs", memoir_sections: "Memoir section|Memoir sections",
   },
   g: { directory: "Directory", settings: "Settings", programs: "Programmes", planning: "Planning", collab: "Collaboration", reports: "Reports", finance: "Finance", commercial: "Commercial", legal: "Contracts and rights",
-    gdpr: "GDPR", content: "Assets", quality: "Quality and delivery", broadcast: "Broadcast", audience: "Audiences", docs: "Documents", agent: "Agent" },
+    gdpr: "GDPR", content: "Assets", quality: "Quality and delivery", broadcast: "Broadcast", audience: "Audiences", docs: "Documents", agent: "Agent", memoirs: "Memoirs" },
   f: {
     accent: "Accent colour", accepted_at: "Accepted on", account: "Ledger account", action: "Action", active: "Active", actual_end: "Actual end", actual_start: "Actual start", address: "Address", age_range: "Age range",
     agent_contact: "Agent contact", agent_name: "Agent", air_date: "Air date", air_start: "Air start", amount: "Amount", apply_by: "Apply by", approved: "Approved",
@@ -63,6 +64,7 @@ export default {
     true_peak: "True peak", type: "Type", unit: "Unit", unit_cost: "Unit cost", updated: "Modified", updated_by: "Modified by", uri: "Path or link", usage: "Usage", user: "User", username: "User",
     valid_from: "Valid from", valid_to: "Valid until", value: "Value", variables: "Variables", vars: "Values", vat: "VAT", vat_id: "VAT no.", vat_rate: "VAT (%)", version: "Version", video_codec: "Video codec",
     watermark: "Watermark", web: "Website", window_end: "Window end", window_start: "Window start",
+    phase: "Phase", caption: "Caption", alt_text: "Alt text", credit: "Credit", shot_date: "Date taken", people: "People shown", rights: "Usage rights", rights_note: "Rights note", featured: "Featured", width: "Width (px)", height: "Height (px)", origin: "Origin", spec: "Graphic spec", lat: "Latitude", lng: "Longitude", date_from: "From", date_to: "To", shoot_days: "Shoot days", permit: "Permit", contact: "Contact", period_start: "Period start", period_end: "Period end", funder: "Recipient or funder", funder_ref: "File reference", audience_note: "Who reads it", tone: "Tone", brief: "Instructions", built_at: "Built on", fields: "Structured fields", media_ids: "Images", visuals: "Graphics", agent_brief: "Brief for the agent", cover_media_id: "Cover image", location_id: "Location",
   },
   fe: {
     "grants.body": "Granting body", "comments.body": "Comment", "editorial_lines.body": "Text", "doc_templates.body": "Template content", "doc_templates.name": "Name", "episodes.number": "No.",
@@ -106,6 +108,7 @@ export default {
     terminated: "Terminated", theme: "Theme", todo: "To do", transfer: "Bank transfer", travel: "Travel and per diems", tv: "Television", unavailable: "Unavailable", url: "Link", validated: "Validated", vehicle: "Vehicle",
     vi: "VI · Visual instrumental", vital_interest: "Vital interest", voice: "Voice", void: "Void", vv: "VV · Visual vocal", wontfix: "Won't fix", working: "Working",
     paused: "Paused", payroll: "Payroll", en: "English", es: "Spanish", ca: "Catalan", A3: "A3", A4: "A4", Letter: "Letter", Legal: "Legal (US)",
+    photo: "Photograph", behind_scenes: "Behind the scenes", screenshot: "Screenshot", press: "Press", document: "Document", preproduction: "Pre-production", promotion: "Promotion", owned: "Owned", licensed: "Licensed", release_pending: "Release pending", upload: "Uploaded", agent: "Agent", generated: "Generated", exterior: "Exterior", interior: "Interior", remote: "Remote", subsidy: "Grant justification", annual: "Annual report", season_close: "Season wrap-up", writing: "Being written", empty: "Empty", skipped: "Skipped", institutional: "Institutional", narrative: "Narrative",
   },
   oe: {
     "status.active": "Active", "status.planned": "Planned", "billing_plan.status.planned": "Planned", "broadcasts.status.planned": "Planned", "episodes.status.script": "Script", "episodes.status.qc": "Quality control",

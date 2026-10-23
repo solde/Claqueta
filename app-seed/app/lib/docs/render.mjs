@@ -1,4 +1,4 @@
-// Orchestrator of the document engine: gathers context (programme, episode, company, variables), expands the template, parses Collado Markdown,
+// Orchestrator of the document engine: gathers context (programme, episode, company, variables), expands the template, parses Claqueta Markdown,
 // resolves data/chart blocks with the caller's permissions, and renders to HTML / PDF / DOCX / XLSX / Markdown.
 import { spawn } from "node:child_process";
 import fs from "node:fs";
@@ -16,11 +16,15 @@ import { runSource } from "./datasets.mjs";
 import { chartSvg } from "./charts.mjs";
 import { resolveBrand, DEFAULT_BRAND } from "./brand.mjs";
 import { renderHtml } from "./html.mjs";
+import { renderGraphic } from "./graphics.mjs";
+import { createHash } from "node:crypto";
 
+/** Output formats: MIME type and extension of html, pdf, docx, md and the page preview (png). */
 export const FORMATS = { html: ["text/html; charset=utf-8", "html"], pdf: ["application/pdf", "pdf"], docx: ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", "docx"], md: ["text/markdown; charset=utf-8", "md"], png: ["application/json", "json"] };
 
 // ---- external tools ------------------------------------------------------------------------------------------------------------------
 const cache = {};
+/** Whether an executable exists on PATH (cached); the render pipeline degrades when WeasyPrint, pdftoppm or rsvg-convert are missing. */
 export function hasTool(cmd) {
   if (cache[cmd] !== undefined) return cache[cmd];
   const dirs = String(process.env.PATH || "").split(path.delimiter); cache[cmd] = dirs.some((d) => { try { fs.accessSync(path.join(d, cmd), fs.constants.X_OK); return true; } catch { return false; } });
@@ -39,6 +43,7 @@ function forChromium(html) {
   const lit = JSON.stringify(title.slice(0, 120)).replace(/\u2028|\u2029/g, " ");
   return html.replaceAll("string(doctitle)", lit).replaceAll("string-set:doctitle content();", "").replaceAll("string-set:doctitle content()", "");
 }
+/** What this install can do (PDF engine, page previews, SVG to PNG, DOCX, XLSX): the answer behind `collado-doc caps` and `check`. */
 export const capabilities = () => ({ pdf: !!RENDER_URL || hasTool("weasyprint"), pdf_engine: RENDER_URL ? "Chromium" : "WeasyPrint", png: hasTool("pdftoppm"), svg_png: !!RENDER_URL || hasTool("rsvg-convert"), docx: true, xlsx: true, pptx: hasTool("python3") });
 function run(cmd, args, input, timeoutMs = 90000) {
   return new Promise((resolve, reject) => {
@@ -53,21 +58,39 @@ function run(cmd, args, input, timeoutMs = 90000) {
 }
 let active = 0; const waiting = [];
 async function limited(fn) { if (active >= 2) await new Promise((r) => waiting.push(r)); active++; try { return await fn(); } finally { active--; waiting.shift()?.(); } }
+/** Print-ready HTML to PDF with Electron's Chromium (desktop) or WeasyPrint (server); at most two run at a time. */
 export async function htmlToPdf(html, { pdfa = false } = {}) {
   if (RENDER_URL) return limited(() => renderService("/pdf", forChromium(html), "text/html; charset=utf-8"));
   if (!hasTool("weasyprint")) throw bad("pdf_unavailable", { hint: "WeasyPrint is not installed; use the HTML export and print to PDF from the browser" });
   return limited(() => run("weasyprint", ["--quiet", "--media-type", "print", ...(pdfa ? ["--pdf-variant", "pdf/a-3b"] : []), "--optimize-images", "-", "-"], html));
 }
+/** Renders pages of a PDF to PNG (base64) with pdftoppm so the layout can be inspected. */
 export async function pdfToPng(pdf, { first = 1, last = 3, dpi = 70 } = {}) {
   if (!hasTool("pdftoppm")) throw bad("tool_missing:pdftoppm");
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cld-png-"));
   try { fs.writeFileSync(path.join(dir, "in.pdf"), pdf); await run("pdftoppm", ["-png", "-r", String(dpi), "-f", String(first), "-l", String(last), path.join(dir, "in.pdf"), path.join(dir, "p")], "");
     return fs.readdirSync(dir).filter((f) => f.endsWith(".png")).sort().map((f) => fs.readFileSync(path.join(dir, f)).toString("base64")); } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 }
-export async function svgToPng(svg, width = 1440) {
-  if (RENDER_URL) { try { return await renderService(`/svg-png?width=${width}`, svg, "image/svg+xml", 20000); } catch { return null; } }
+/** Rasterises an SVG (Word cannot embed SVG) through the desktop render service or rsvg-convert; null when no rasteriser exists. */
+export async function svgToPng(svg, width = 1440, { debug } = {}) {
+  if (RENDER_URL) { try { return await renderService(`/svg-png?width=${width}`, svg, "image/svg+xml", 20000); } catch (e) { if (debug) debug.error = String(e.message || e) + " " + (e.detail?.stderr || ""); return null; } }
+  if (debug && !RENDER_URL) debug.error = "no RENDER_URL";
   if (!hasTool("rsvg-convert")) return null;
   try { return await run("rsvg-convert", ["-w", String(width), "-f", "png", "-b", "white"], svg, 20000); } catch { return null; }
+}
+
+/** Reduces a raster image to `max` pixels on its longest side (the desktop build does it with Electron; elsewhere the original is used). null = keep the original. */
+export async function resizeImage(buffer, mime, max = 1800) {
+  if (!RENDER_URL || !/^image\/(png|jpeg|gif|webp)$/.test(mime)) return null;
+  try { const out = await renderService(`/image?max=${max}`, buffer, mime, 30000); return out.length && out.length < buffer.length ? { buffer: out, mime: out[0] === 0x89 ? "image/png" : "image/jpeg" } : null; } catch { return null; }
+}
+const imgCache = new Map();
+/** { buffer, mime } of an image attachment, reduced to `max` pixels (cached): gallery thumbnails and pictures embedded in documents. */
+export async function imageFor(attachmentId, max = 480) {
+  const f = readFileRaw(attachmentId); if (!f || !/^image\//.test(f.mime)) return null;
+  const key = `${attachmentId}:${max}:${createHash("sha1").update(f.buffer.subarray(0, 4096)).update(String(f.buffer.length)).digest("hex")}`, hit = imgCache.get(key); if (hit) return hit;
+  const out = (await resizeImage(f.buffer, f.mime, max)) || { buffer: f.buffer, mime: f.mime };
+  imgCache.set(key, out); if (imgCache.size > 120) imgCache.delete(imgCache.keys().next().value); return out;
 }
 
 // ---- context -------------------------------------------------------------------------------------------------------------------------
@@ -76,12 +99,14 @@ function safeRow(ctx, entity, id) {
   if (!id) return null;
   try { const r = E.getRow(ctx, entity, id); for (const fd of Object.values(ENTITIES[entity].fields)) if (fd.type === "ref" && r[fd.name]) r[`${fd.name}_label`] = E.label(fd.to, r[fd.name]); return r; } catch { return null; }
 }
+/** The brand row to use: the requested one, else the default brand, else {}. */
 export function brandRowFor(ctx, brandId) {
   if (brandId) { const r = safeRow(ctx, "brands", brandId); if (r) return r; }
   const d = q.get("SELECT id FROM brands WHERE is_default = 1 ORDER BY id LIMIT 1"); return d ? safeRow(ctx, "brands", d.id) || {} : {};
 }
 const ENUM_LABEL = (lang) => (arg, v) => { const [entity, field] = String(arg).split("."); return optionLabel(lang, entity, field, v); };
 
+/** The data templates see ({{program.*}}, {{episode.*}}, {{company.*}}, {{user.*}}, {{today}}, {{vars.*}}), read with the caller's permissions. */
 export function buildContext(ctx, input, lang) {
   const program = safeRow(ctx, "programs", input.program_id), season = safeRow(ctx, "seasons", input.season_id), episode = safeRow(ctx, "episodes", input.episode_id);
   const prog = program || (episode && safeRow(ctx, "programs", episode.program_id)) || null;
@@ -102,6 +127,7 @@ const cellFor = (v, c, lang, cur) => {
   }
   return { inlines: parseInline(text.replace(/[\\`*_[\]]/g, "\\$&")), colspan: 1, align: c.align || "", cls: ["money", "num", "pct", "duration"].includes(c.type) ? "num" : "" };
 };
+/** Replaces `data`, `chart`, `graphic` and `gallery` blocks by their result (tables, SVG figures, image sets), recursively and under the caller's permissions; failures become visible warnings, not crashes. */
 export async function resolveBlocks(ctx, blocks, env) {
   const out = [];
   for (const b of blocks) {
@@ -119,6 +145,19 @@ export async function resolveBlocks(ctx, blocks, env) {
       else if (total === "1" || total === true) { const sums = cols.map((c) => (c.total === "sum" ? ds.rows.filter((r) => !r._bold || !ds.rows.some((x) => x._indent)).reduce((a, r) => a + (Number(r[c.key]) || 0), 0) : undefined)); if (sums.some((x) => x !== undefined)) foot = cols.map((c, i) => (sums[i] !== undefined ? cellFor(sums[i], c, env.lang, cur) : { inlines: i === 0 ? [{ k: "b", c: [{ k: "text", v: str(env.lang, "total") }] }] : [], colspan: 1 })); }
       out.push({ t: "table", head: cols.map((c) => ({ inlines: [{ k: "text", v: c.label }], colspan: 1, align: c.align || "", cls: ["money", "num", "pct", "duration"].includes(c.type) ? "num" : "" })), rows, foot, caption: typeof title === "string" ? title : "", widths: typeof widths === "string" ? widths.split(",") : null, align: [] });
       continue;
+    }
+    if (b.t === "graphic") {
+      let spec = { ...b.attrs }; if (b.body) { try { spec = { ...spec, ...JSON.parse(b.body) }; } catch { env.warnings.push("graphic_bad_json"); } }
+      try { const g = await renderGraphic(ctx, spec, { brand: env.brand, lang: env.lang }); out.push({ t: "chart", svg: g.svg, caption: typeof spec.caption === "string" ? spec.caption : "" }); }
+      catch (e) { env.warnings.push(`source_failed:graphic ${spec.type || ""}:${e.message}`); out.push({ t: "callout", kind: "warn", title: "", blocks: parseBlocks(`**graphic ${spec.type || ""}:** ${String(e.message).replace(/[*_`]/g, "")}`) }); }
+      continue;
+    }
+    if (b.t === "gallery") {
+      const items = []; const ids = String(b.attrs.ids || "").split(",").map((x) => Number(x.trim())).filter(Boolean);
+      for (const id of ids) { try { const mi = E.getRow(ctx, "media_items", id); if (!mi.attachment_id) continue; const im = await imageFor(mi.attachment_id, b.attrs.layout === "logos" ? 500 : 1600); if (im) items.push({ src: `data:${im.mime};base64,${im.buffer.toString("base64")}`, caption: mi.caption || mi.title || "", credit: mi.credit || "", alt: mi.alt_text || mi.title || "", w: mi.width || 0, h: mi.height || 0, id }); } catch { /* not visible to this person */ } }
+      for (const line of String(b.body || "").split("\n").map((l) => l.trim()).filter(Boolean)) { const m = /^att:(\d+)\s*(?:\|\s*(.*))?$/.exec(line); if (!m) continue; const im = await imageFor(m[1], 1600); if (im) items.push({ src: `data:${im.mime};base64,${im.buffer.toString("base64")}`, caption: m[2] || "", credit: "", alt: m[2] || "", w: 0, h: 0 }); }
+      if (!items.length) { env.warnings.push("gallery_empty"); continue; }
+      out.push({ t: "gallery", layout: ["mosaic", "strip", "hero", "grid", "logos"].includes(b.attrs.layout) ? b.attrs.layout : items.length === 1 ? "hero" : "mosaic", items, title: typeof b.attrs.title === "string" ? b.attrs.title : "" }); continue;
     }
     const nb = { ...b };
     if (b.blocks) nb.blocks = await resolveBlocks(ctx, b.blocks, env);
@@ -149,11 +188,13 @@ export async function buildDocument(ctx, input) {
   if (meta.title !== undefined && !meta.title) meta.title = merged.title;
   const env = { lang, brand, warnings: [], currency: data.currency };
   const blocks = await resolveBlocks(ctx, parsed.blocks, env);
-  const attMap = (src) => { const m = /^att:(\d+)$/.exec(src); if (m) { const f = readFileRaw(m[1]); return f && /^image\//.test(f.mime) ? `data:${f.mime};base64,${f.buffer.toString("base64")}` : ""; } if (src === "logo") return brand.logo || ""; return /^data:image\//.test(src) ? src : ""; };
+  const reduced = new Map(); for (const id of new Set([...exp.text.matchAll(/att:(\d+)/g)].map((x) => x[1]))) { const im = await imageFor(id, 1800); if (im) reduced.set(id, `data:${im.mime};base64,${im.buffer.toString("base64")}`); }
+  const attMap = (src) => { const m = /^att:(\d+)$/.exec(src); if (m) return reduced.get(m[1]) || ""; if (src === "logo") return brand.logo || ""; return /^data:image\//.test(src) ? src : ""; };
   const unresolved = exp.missing.filter((m) => !m.startsWith("@"));
   return { doc: { meta, blocks, imageResolver: attMap }, brand, lang, warnings: [...env.warnings, ...unresolved.map((m) => `missing_variable:${m}`)], source: exp.text, rowId: row?.id, programId: merged.program_id };
 }
 
+/** Renders a document (stored, from a template, or raw Markdown) to html, md, docx or pdf/png: variables, parsing, live data, brand, output. Returns { buffer, mime, ext, warnings, title }. */
 export async function renderDocument(ctx, input, format = "html") {
   if (!FORMATS[format]) throw bad("unknown_format");
   const b = await buildDocument(ctx, input);

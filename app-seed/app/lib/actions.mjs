@@ -76,6 +76,7 @@ export function suggestMatches(ctx, movementId) {
   }
   return out.sort((a, b) => b.score - a.score).slice(0, 8);
 }
+/** Reconciles a bank movement with a client invoice (creates the payment) or a supplier bill (marks it paid); needs fin.edit. */
 export async function matchMovement(ctx, { movement_id, entity, id }) {
   if (!has(ctx, "fin.edit")) throw forbidden("needs:fin.edit");
   const m = rawGet("bank_movements", movement_id); if (!m) throw bad("no_movement"); if (m.matched) throw bad("already_matched");
@@ -92,6 +93,7 @@ export async function matchMovement(ctx, { movement_id, entity, id }) {
   q.run("UPDATE bank_movements SET matched = 1, matched_entity = ?, matched_id = ? WHERE id = ?", entity, Number(id), m.id);
   return { ok: true };
 }
+/** Undoes a reconciliation: removes the payment or sets the bill back to approved. */
 export function unmatchMovement(ctx, movement_id) {
   if (!has(ctx, "fin.edit")) throw forbidden("needs:fin.edit");
   const m = rawGet("bank_movements", movement_id); if (!m || !m.matched) throw bad("not_matched");
@@ -123,6 +125,7 @@ export const DEFAULT_COMPLIANCE = {
   pluralism: ["editorial_line_respected", "right_of_reply", "sources_checked"],
   copyright: ["music_cleared", "archive_cleared", "third_party_content"],
 };
+/** Creates the regulatory check items of an episode from the configured checklists (skips the ones that exist). */
 export async function initCompliance(ctx, { episode_id, areas }) {
   const ep = rawGet("episodes", episode_id); if (!ep) throw bad("no_episode");
   const cfg = getSetting("compliance_checklists", DEFAULT_COMPLIANCE); const made = [];
@@ -153,6 +156,7 @@ export async function reorderRundown(ctx, { episode_id, ids }) {
   list.forEach((id, i) => q.run("UPDATE rundown_items SET position = ?, rev = rev + 1 WHERE id = ?", (i + 1) * 10, id));
   return { ok: true, n: list.length };
 }
+/** Copies the rundown of one episode to another. */
 export async function duplicateEpisodeRundown(ctx, { from_episode_id, to_episode_id }) {
   const rows = q.all("SELECT * FROM rundown_items WHERE episode_id = ? ORDER BY position", Number(from_episode_id)); const to = rawGet("episodes", to_episode_id);
   if (!to) throw bad("no_episode");
@@ -173,6 +177,7 @@ export function exportOdooBills(ctx, { from, to } = {}) {
   }
   return csvRows(rows, ",");
 }
+/** CSV of issued client invoices in the shape of Odoo's import template. */
 export function exportOdooInvoices(ctx, { from, to } = {}) {
   if (!has(ctx, "fin.view")) throw forbidden("needs:fin.view");
   const cfg = getSetting("finance", {}).odoo || {}; const taxName = (r) => (cfg.sale_taxes && cfg.sale_taxes[String(r)]) || `${r}% IVA repercutido`;
@@ -181,6 +186,7 @@ export function exportOdooInvoices(ctx, { from, to } = {}) {
     rows.push([label("partners", i.client_id), i.date, i.due_date || "", i.number, "out_invoice", i.concept, 1, money(i.base), cfg.default_income_account || "", i.vat_rate ? taxName(i.vat_rate) : ""]);
   return csvRows(rows, ",");
 }
+/** CSV of rows of an entity: its list columns plus up to 20 other plain fields (secrets and JSON excluded). */
 export function exportCsv(ctx, entity, rows) {
   const e = ENTITIES[entity]; const cols = e.list.filter((c) => e.fields[c]).concat(Object.keys(e.fields).filter((c) => !e.list.includes(c) && e.fields[c].type !== "secret" && e.fields[c].type !== "json").slice(0, 20));
   return csvRows([cols, ...rows.map((r) => cols.map((c) => r[c] ?? ""))]);
@@ -202,5 +208,5 @@ export function icsExport(ctx, { program } = {}) {
     ev.push(["BEGIN:VEVENT", `UID:bk-${b.id}@collado`, `DTSTAMP:${new Date().toISOString().replace(/[-:.]/g, "").slice(0, 15)}Z`, `DTSTART:${dt(b.start)}`, `DTEND:${dt(b.end)}`, `SUMMARY:${esc2(b.title + " · " + b.rname)}`, "END:VEVENT"].join("\r\n"));
   for (const m of q.all(`SELECT * FROM milestones WHERE 1=1 ${w}`)) allDay(`ms-${m.id}`, m.end_date || m.start_date, `${pname(m.program_id)}: ${m.title}`);
   if (has(ctx, "legal.view")) for (const c of q.all(`SELECT * FROM contracts WHERE end_date != '' AND status IN ('active','signing') ${w}`)) allDay(`ct-${c.id}`, c.end_date, `Vence contrato: ${c.title}`);
-  return ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Collado//ES", "CALSCALE:GREGORIAN", "X-WR-CALNAME:Collado", ...ev, "END:VCALENDAR", ""].join("\r\n");
+  return ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Claqueta//ES", "CALSCALE:GREGORIAN", "X-WR-CALNAME:Claqueta", ...ev, "END:VCALENDAR", ""].join("\r\n");
 }

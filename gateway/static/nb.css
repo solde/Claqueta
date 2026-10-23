@@ -1,4 +1,4 @@
-/* Collado neobrutalism kit — tokens + atomic components. Source of truth: gateway/static/nb.css (a copy lives in app-seed/app/public/nb.css; tests/nb-sync keeps them equal).
+/* Claqueta neobrutalism kit — tokens + atomic components. Source of truth: gateway/static/nb.css (a copy lives in app-seed/app/public/nb.css; tests/nb-sync keeps them equal).
    Rules (see the design guide): thick black borders, hard offset shadows (no blur), flat saturated colours, no gradients/transparency, radius 0, "press" feedback. */
 @font-face { font-family: "Space Grotesk"; font-weight: 300 700; font-style: normal; font-display: swap; src: url(fonts/space-grotesk-latin-wght-normal.woff2) format("woff2");
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
@@ -86,7 +86,7 @@ code, kbd, pre, .nb-mono { font-family: var(--nb-font-mono); }
 .nb-input[readonly], .nb-input[disabled], .nb-select[disabled], .nb-textarea[disabled] { background: var(--nb-disabled); box-shadow: none; }
 .nb-input--color { padding: 2px; min-width: 64px; } input[type="date"].nb-input, input[type="time"].nb-input, input[type="datetime-local"].nb-input { font-family: var(--nb-font-mono); }
 .nb-select { appearance: none; padding-right: var(--nb-space-8); }
-.nb-selectwrap { position: relative; display: block; } .nb-selectwrap::after { content: "▼"; position: absolute; right: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; font-size: .7rem; color: var(--nb-ink); }
+.nb-selectwrap { position: relative; display: block; } .nb-selectwrap::after { content: ""; position: absolute; right: 14px; top: 50%; width: 7px; height: 7px; border-right: 2px solid var(--nb-ink); border-bottom: 2px solid var(--nb-ink); transform: translateY(-70%) rotate(45deg); pointer-events: none; }
 .nb-error { font-weight: 700; color: var(--nb-ink); background: var(--nb-error); border: var(--nb-border); padding: var(--nb-space-1) var(--nb-space-2); margin-top: var(--nb-space-1); box-shadow: var(--nb-shadow-sm); color: #FFFFFF; }
 .nb-check { display: inline-flex; align-items: center; gap: var(--nb-space-2); min-height: 44px; cursor: pointer; font-weight: 600; }
 .nb-check input { appearance: none; width: 24px; height: 24px; margin: 0; border: var(--nb-border); background: var(--nb-surface); border-radius: var(--nb-radius); display: inline-grid; place-content: center; cursor: pointer; flex: none; }
@@ -160,3 +160,9 @@ code, kbd, pre, .nb-mono { font-family: var(--nb-font-mono); }
 .nb-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 @media (min-width: 768px) { .nb-container { padding-inline: var(--nb-space-8); } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
+
+/* SVG icons (icons.js): sized to the text, coloured by it */
+.svg-ico { width: 1.15em; height: 1.15em; vertical-align: -.2em; flex: none; } .ico { display: inline-flex; align-items: center; justify-content: center; min-width: 1.4em; } .ico .svg-ico { width: 1.2em; height: 1.2em; vertical-align: 0; }
+.nb-badge .ico { min-width: 0; } .nb-badge .svg-ico { width: 1em; height: 1em; } .ico.sort { min-width: 0; margin-left: 4px; } .ico.sort .svg-ico { width: .9em; height: .9em; }
+.nb-close .svg-ico { width: 1.1em; height: 1.1em; } .cal__ev .ico, .tl__bar .ico { min-width: 0; margin-right: 3px; } .cal__ev .svg-ico, .tl__bar .svg-ico { width: 1em; height: 1em; vertical-align: -.15em; }
+.ico { line-height: 1; } .ico .svg-ico { display: block; } .empty__ico { display: flex; justify-content: center; margin-bottom: 8px; } .empty__ico .svg-ico { width: 2.4rem; height: 2.4rem; }

@@ -12,6 +12,10 @@ Reglas **de este proyecto** para el agente de {{APP_NAME}}. Prevalecen sobre las
    Si falta algo que mejora el resultado (vista previa de páginas, LibreOffice, Python con python-pptx…), dile a la persona qué falta, qué mejora y el comando exacto; **no instales nada sin su permiso**. Si no se instala, di qué no has podido comprobar.
 3. Mira qué hay en esta carpeta antes de crear nada nuevo (no dupliques, no pises versiones).
 
+## Memorias, galería y gráficos de este proyecto
+- Memorias (por secciones, con datos reales): `collado-doc memoir list --program {{ID}}` · `collado-doc memoir show ID`. Imágenes: `collado-doc media list --program {{ID}}`. Gráficos propios: `collado-doc graphic types`. Skill **collado-memorias**.
+- Todo gráfico o imagen que crees para este proyecto se guarda en su galería (`media add`, `graphic save`) con pie de foto, autoría y derechos.
+
 ## Dónde se guarda cada cosa
 - `Documentos/` — informes, dossiers, actas y contratos (PDF/Word) y su fuente en Markdown (`.md`).
 - `Presupuestos/` — hojas de cálculo y versiones de presupuesto.

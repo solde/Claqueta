@@ -107,3 +107,9 @@ Opcionales y externos al programa (solo el agente, vía `collado-doc`): Python +
 Probado en macOS (arm64): arranque, `.app` empaquetado, 10 comprobaciones end-to-end (PDF, DOCX, SVG→PNG, terminal, archivos, bloqueo de red, cierre limpio). **Windows y Linux no se han
 ejecutado** (no hay máquinas aquí): el código evita `tmux`, `setpriv`, `env -i`, `zip` y symlinks de directorio, pero conviene pasar `npm run desktop:smoke` en cada sistema. En Windows la consola
 usa PowerShell y Claude Code puede necesitar Git for Windows. Los instaladores no se han abierto en Windows/Linux. El login de Claude en macOS usa el llavero del sistema (el tutorial lo detecta).
+
+## Memorias de proyecto, galería y gráficos
+- **Estudio de secciones y campos:** [MEMORIAS.md](MEMORIAS.md) (generado desde el catálogo `app-seed/app/lib/memoir-catalog.mjs`; `node scripts/memoir-study.mjs` lo regenera).
+- **En la app:** grupo *Memorias* del menú: Memorias (editor por secciones), Galería (subida con arrastrar y soltar, pies de foto, autoría y derechos, generador de gráficos) y Localizaciones. «Ensamblar documento» crea un documento editable que se exporta a PDF o Word.
+- **Para el agente:** `collado-doc memoir | media | graphic` y la skill `collado-memorias`. Los gráficos (cifras, cronología, organigrama, mapa de localizaciones, metas, citas, separadores, portadas, cascada, mapa de calor) se dibujan con la marca del equipo; `:::graphic` y `:::gallery` funcionan en cualquier documento.
+- **Imágenes:** en la versión de escritorio las fotos se reducen con Electron (`/image` del servicio de render) para las miniaturas y para no inflar los PDF; fuera de ella se usa el original.

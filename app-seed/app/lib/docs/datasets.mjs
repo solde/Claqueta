@@ -26,6 +26,7 @@ async function entityTable(ctx, lang, entity, params) {
   return { title: entityName(lang, entity, true), columns, rows: out };
 }
 
+/** The data sources documents can query with `:::data source=name` and `:::chart source=name`: each declares its label, parameters and a `run(ctx, params, lang)` that returns typed columns, rows and optional totals, always under the caller's permissions. */
 export const DATASETS = {
   entity: { label: "Any entity (entity=, cols=, program=, f.field=value)", params: ["entity", "cols", "program", "episode", "season", "sort", "limit", "q"], run: (ctx, p, lang) => entityTable(ctx, lang, p.entity, p) },
   episodes: { label: "Episodes of a programme", params: ["program", "season"], run: (ctx, p, lang) => entityTable(ctx, lang, "episodes", { ...p, cols: "number,title,status,shoot_date,delivery_due,air_date", sort: "season_id,number" }) },
@@ -91,7 +92,9 @@ export const DATASETS = {
     const r = R.rightsCheck(ctx, { episode_id: p.episode }); return { title: str(lang, "c_derechos"), columns: [col("title", str(lang, "c_derecho")), col("kind", str(lang, "c_tipo")), col("window_end", str(lang, "c_fin_ventana"), "date"), col("state", str(lang, "c_estado"))], rows: r.rights }; } },
 };
 
+/** Names, labels and parameters of the sources (what `collado-doc sources` prints). */
 export function listSources() { return Object.entries(DATASETS).map(([name, d]) => ({ name, label: d.label, params: d.params })); }
+/** Runs a source by name with the caller's permissions; unknown names are a 400. */
 export async function runSource(ctx, name, params, lang) {
   const d = DATASETS[name]; if (!d) throw bad(`unknown_source:${name}`);
   return d.run(ctx, params, lang);

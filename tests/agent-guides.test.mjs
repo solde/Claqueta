@@ -1,3 +1,4 @@
+// Unit tests of the agent guidelines: the CLAUDE.md files created for each person and project (desktop and server templates, repaired imports), the shipped guideline files and `collado-doc check`.
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";

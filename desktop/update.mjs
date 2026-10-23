@@ -12,6 +12,7 @@ export function pickAsset(assets, { platform, arch }) {
   const archive = { win32: new RegExp(`-win-${a}\\.zip$`), linux: new RegExp(`-linux-${a}\\.tar\\.gz$`) }[platform];   // no installer built for this system (yet): the portable archive
   const list = assets || []; return (want && list.find((x) => want.test(x.name))) || (archive && list.find((x) => archive.test(x.name))) || null;
 }
+/** URL of the releases page of the configured repository. */
 export const releasesUrl = ({ host, repo }) => `${host}/${repo}/releases`;
 /** -> { status: "current" | "available" | "unreachable", current, latest?: { version, name, notes, page, asset, size }, error? } */
 export async function checkForUpdate({ host, repo, current, platform, arch, fetchImpl = fetch, timeoutMs = 15000 }) {

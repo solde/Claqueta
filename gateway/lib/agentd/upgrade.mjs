@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 
+/** Hash of a directory tree (names and contents, ignoring node_modules and .git) to tell whether the seed changed. */
 export function seedHash(dir) {
   const h = crypto.createHash("sha256"); const walk = (d, rel = "") => { for (const f of fs.readdirSync(d).sort()) { if (f === "node_modules" || f === ".git") continue; const p = path.join(d, f), r = path.join(rel, f); const st = fs.statSync(p); if (st.isDirectory()) walk(p, r); else { h.update(r + "\0"); h.update(fs.readFileSync(p)); } } };
   walk(dir); return h.digest("hex").slice(0, 16);

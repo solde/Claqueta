@@ -1,3 +1,4 @@
+// Unit tests of the cloud-sync controller (desktop/sync/controller.mjs) against a fake provider: connect, start-up pull, conflicts, the lease question, offline start and disconnect.
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";

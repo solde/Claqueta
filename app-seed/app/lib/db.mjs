@@ -14,8 +14,11 @@ export const LEGACY_ORG = "principal", ORG_RE = /^[a-z][a-z0-9-]{1,30}$/;
 const als = new AsyncLocalStorage();
 const orgs = new Map();   // slug -> { slug, db, cache, depth, dir, files }
 let DATA_DIR = null;
+/** Folder of an organization's data (the legacy one lives at the data root, the others under orgs/<slug>). */
 export const orgDir = (slug) => (slug === LEGACY_ORG ? DATA_DIR : path.join(DATA_DIR, "orgs", slug));
+/** Folder with the encrypted attachments of an organization. */
 export const orgFilesDir = (slug) => path.join(orgDir(slug), "files");
+/** Organization of the request in progress (the legacy one outside a request). */
 export const currentSlug = () => als.getStore()?.slug || LEGACY_ORG;
 const cur = () => als.getStore() || (orgs.get(LEGACY_ORG) ?? (() => { throw new Error("database not open"); })());
 /** Every organization that has data on disk (what background work iterates over). */
@@ -27,8 +30,10 @@ export function listOrgSlugs() {
 export async function inOrg(slug, fn, name) { const o = openOrg(slug, name); await o.ready; return als.run(o, fn); }
 /** Hooks run once per organization right after its database is created/opened (schema sync + seeds are registered by the server). */
 let onOpen = () => {}; export const setOrgInit = (fn) => { onOpen = fn; };
+/** The current organization's SQLite connection (a proxy: each access resolves the organization of the running request). */
 export const db = new Proxy({}, { get: (_, k) => { const d = cur().db, v = d[k]; return typeof v === "function" ? v.bind(d) : v; } });
 const prep = (sql) => { const o = cur(); let s = o.cache.get(sql); if (!s) { s = o.db.prepare(sql); if (o.cache.size > 800) o.cache.clear(); o.cache.set(sql, s); } return s; };
+/** Prepared-statement helpers on the current organization: all (rows), get (first row), run (write) and exec (raw SQL). */
 export const q = {
   all: (sql, ...p) => prep(sql).all(...p),
   get: (sql, ...p) => prep(sql).get(...p),
@@ -69,6 +74,7 @@ function openOrg(slug, name) {
   o.ready = slug === LEGACY_ORG ? Promise.resolve() : als.run(o, async () => { try { await onOpen(slug, name); } catch (e) { orgs.delete(slug); try { d.close(); } catch { /* ignore */ } throw e; } });   // the legacy one is initialised by the server's start-up sequence
   return o;
 }
+/** Closes every open organization database (shutdown and tests). */
 export function closeAll() { for (const o of orgs.values()) try { o.db.close(); } catch { /* already closed */ } }
 
 const quote = (n) => `"${n}"`;
@@ -99,8 +105,11 @@ export function syncSchema() {
   }
 }
 
+/** Reads a value from the `meta` table (schema/seed markers). */
 export const getMeta = (k) => q.get("SELECT value FROM meta WHERE key = ?", k)?.value;
+/** Writes a value to the `meta` table. */
 export const setMeta = (k, v) => q.run("INSERT INTO meta(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", k, String(v));
+/** Atomically increments and returns a named counter (document numbers, version numbers). */
 export function nextSeq(name) {
   return tx(() => {
     const r = q.get("SELECT value FROM sequences WHERE name = ?", name);
@@ -109,7 +118,9 @@ export function nextSeq(name) {
     return v;
   });
 }
+/** Reads a JSON setting of the organization (company, finance, alerts...); `dflt` when missing or unparseable. */
 export const getSetting = (key, dflt = null) => { const r = q.get("SELECT value FROM settings WHERE key = ?", key); if (!r) return dflt; try { return JSON.parse(r.value); } catch { return dflt; } };
+/** Stores a JSON setting with who changed it and when. */
 export function setSetting(key, value, user = "system") {
   q.run("INSERT INTO settings(key, value, updated, updated_by) VALUES (?, ?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated = excluded.updated, updated_by = excluded.updated_by",
     key, JSON.stringify(value), new Date().toISOString(), user);

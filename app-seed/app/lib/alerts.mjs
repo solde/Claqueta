@@ -8,6 +8,7 @@ import * as R from "./reports.mjs";
 const OK_BILL = "('approved','paid')";
 const E = (c) => Math.round(c || 0) / 100;
 
+/** Everything that needs attention for the caller, ranked by severity: late deliveries, expiring contracts and rights, overruns, conflicts, compliance risks. Scoped to the caller's modules and programmes. */
 export function alerts(ctx, { program } = {}) {
   const t = today(), out = [];
   const add = (severity, kind, entity, id, program_id, date, params = {}) => out.push({ key: `${kind}:${entity}:${id}`, severity, kind, entity, id, program_id, date, params });
@@ -66,6 +67,7 @@ export function alerts(ctx, { program } = {}) {
   return out.sort((a, b) => rank[a.severity] - rank[b.severity] || (a.date || "9").localeCompare(b.date || "9"));
 }
 
+/** Data of the home screen: programme and pipeline counts, upcoming airings, this week's bookings, alerts, the caller's tasks and approvals, audiences and risks; finance figures with fin.view and workload with people.view. */
 export function dashboard(ctx, { program } = {}) {
   const t = today(), scope = ctx.external ? memberPrograms(ctx) : null;
   const pw = (col = "id") => (scope ? ` AND ${col} IN (${scope.join(",") || 0})` : "") + (program ? ` AND ${col} = ${Number(program)}` : "");

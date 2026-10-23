@@ -1,3 +1,4 @@
+// Unit tests of the cloud-sync engine (desktop/sync/engine.mjs): intact round trip, wrong passphrases and tampering, incremental pushes, the lease, deletions, backups and path safety.
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";

@@ -8,11 +8,14 @@ import { entityList, go, detailHref } from "./lists.js";
 import { md } from "./md.js";
 
 const sch = (e) => S.schema.entities[e];
+/** Specialised sections registered per entity (see registerDetail). */
 export const EXTRAS = {};
 const WIDE = new Set(["budgets"]);   // wide editors: comments/history panel collapsed by default
 const TOP = new Set(["budgets", "episodes", "deliveries", "qc_reports", "cue_sheets", "jobs", "purchase_orders", "bills", "client_invoices"]);   // specialised sections shown above the form                       // entity -> async (row, refs, ctx) => Node[]  (specialised sections, registered by views/*)
+/** Registers a function that adds a specialised section to an entity's detail page. */
 export const registerDetail = (entity, fn) => { EXTRAS[entity] = fn; };
 
+/** Detail page of a row: form, specialised sections, related lists, attachments, approvals, comments and history. */
 export async function renderDetail(entity, id, root) {
   root.replaceChildren(spinner());
   let data; try { data = await entityApi.get(entity, id); } catch (e) { root.replaceChildren(emptyState(e.status === 404 ? t("not_found") : t("load_failed"), btn(t("back"), { ico: "back", onclick: () => history.back() }))); return; }
@@ -41,6 +44,7 @@ export async function renderDetail(entity, id, root) {
   window.onbeforeunload = null;
 }
 
+/** Lists of the rows that reference this one (children of a programme, episode...), built from the schema. */
 function relatedSections(entity, row) {
   const out = [];
   for (const e2 of Object.values(S.schema.entities)) {
@@ -62,6 +66,7 @@ async function comments(entity, row, progId, refresh) {
   const post = btn(t("send"), { ico: "send", sm: true, onclick: async () => { if (!ta.value.trim()) return; try { await entityApi.create("comments", { entity, row_id: row.id, program_id: progId, body: ta.value.trim() }); refresh(); } catch { /* toast */ } } });
   return h("div", (r.rows || []).length ? r.rows.map((c) => h("article.comment", h("header", h("b", c.created_by), h("span.nb-caption", fmt.datetime(c.created)), c.created_by === S.me.user && btn("", { ico: "trash", sm: true, kind: "ghost", title: t("delete"), onclick: async () => { await entityApi.remove("comments", c.id); refresh(); } })), h("div.md", { html: md(c.body) }))) : h("p.nb-help", t("no_comments")), h("div.nb-stack", ta, h("div.nb-row.end", post)));
 }
+/** Attachments panel of a row: upload, add a link, download and delete. */
 async function files(entity, row, progId, refresh) {
   const r = await api.get(`api/e/${entity}/${row.id}/files`, { silent: true }).catch(() => ({ files: [] }));
   const input = h("input", { type: "file", hidden: true, onchange: async () => { const f = input.files[0]; if (!f) return; try { await api.post(`api/files${qs({ entity, id: row.id, name: f.name })}`, f, { silent: false }); toast("uploaded"); refresh(); } catch { /* toast */ } } });
@@ -69,16 +74,19 @@ async function files(entity, row, progId, refresh) {
   return h("div", (r.files || []).length ? h("ul.filelist", r.files.map((f) => h("li", f.kind === "link" ? h("a", { href: f.url, target: "_blank", rel: "noopener noreferrer" }, icon("link"), " ", f.label || f.name) : h("a", { href: `api/files/${f.id}` }, icon("doc"), " ", f.name, h("span.nb-caption", ` · ${size(f.size)}`)), h("span.nb-caption", ` ${fmt.date(f.created)} · ${f.created_by}`), f.shared ? badge(t("shared"), "blue") : null, sch(entity).canWrite && btn("", { ico: "trash", sm: true, kind: "ghost", title: t("delete"), onclick: async () => { if (await confirmDialog(t("confirm_delete", { name: f.name }), { danger: true })) { await api.del(`api/files/${f.id}`); refresh(); } } })))) : h("p.nb-help", t("no_files")),
     sch(entity).canWrite && h("div.nb-row", input, btn(t("upload"), { ico: "upload", sm: true, kind: "secondary", onclick: () => input.click() }), btn(t("add_link"), { ico: "link", sm: true, kind: "secondary", onclick: async () => { const m = await linkDialog(); if (m) { await api.post("api/links", { entity, id: row.id, ...m }); refresh(); } } })));
 }
+/** Dialog to attach a link instead of a file. */
 function linkDialog() {
   return new Promise((res) => { const url = h("input.nb-input", { placeholder: "https://… / smb://… / \\\\nas\\carpeta", autofocus: true }), lab = h("input.nb-input"); let out = null;
     const m = modal({ title: t("add_link"), body: h("div", h("label.nb-label", "URL"), url, h("label.nb-label", t("name")), lab), onclose: () => res(out), actions: [btn(t("cancel"), { kind: "secondary", onclick: () => m.close() }), btn(t("accept"), { onclick: () => { out = { url: url.value, label: lab.value }; m.close(); } })] }); });
 }
+/** Approval requests of a row and the buttons to decide them. */
 async function approvals(entity, row, progId, refresh) {
   const r = await api.get(`api/e/${entity}/${row.id}/approvals`, { silent: true }).catch(() => ({ rows: [] }));
   const decide = async (a, status) => { const c = status === "approved" ? "" : prompt(t("comment")) ; try { await entityApi.update("approvals", a.id, { status, comment: c || a.comment || "", rev: a.rev }); refresh(); } catch { /* toast */ } };
   return h("div", (r.rows || []).length ? r.rows.map((a) => h("article.comment", h("header", h("b", optLabel("approvals", "kind", a.kind)), statusBadge("approvals", "status", a.status), h("span.nb-caption", `${a.requested_by} → ${a.approver || "—"}`)), a.comment && h("div.md", { html: md(a.comment) }), a.status === "pending" && (a.approver === S.me.user || !a.approver) && h("div.nb-row", btn(t("approve"), { kind: "green", sm: true, onclick: () => decide(a, "approved") }), btn(t("request_changes"), { kind: "secondary", sm: true, onclick: () => decide(a, "changes") }), btn(t("reject"), { kind: "danger", sm: true, onclick: () => decide(a, "rejected") })))) : h("p.nb-help", t("no_approvals")),
     sch("approvals")?.canWrite && btn(t("request_approval"), { ico: "stamp", sm: true, onclick: async () => { const ok = await requestApproval(entity, row, progId); if (ok) refresh(); } }));
 }
+/** Dialog to ask a person to approve a row. */
 export async function requestApproval(entity, row, progId) {
   const users = (await api.get("api/users", { silent: true }).catch(() => ({ users: [] }))).users;
   const form = formFields("approvals", { values: undefined, defaults: { kind: "internal" }, only: ["kind", "approver", "due", "comment"] });
@@ -86,9 +94,10 @@ export async function requestApproval(entity, row, progId) {
   const dl = h("datalist", { id: "dl-users" }, users.map((u) => h("option", { value: u.username }, u.name))); form.widgets.approver.el.setAttribute?.("list", "dl-users");
   return new Promise((res) => { let ok = false; const m = modal({ title: t("request_approval"), body: h("div", form.el, dl), onclose: () => res(ok), actions: [btn(t("cancel"), { kind: "secondary", onclick: () => m.close() }), btn(t("send"), { onclick: async () => { try { const body = form.collect(); await entityApi.create("approvals", { ...body, entity, row_id: row.id, program_id: progId, subject: labelFor(sch(entity), row) }); ok = true; toast("created"); m.close(); } catch { /* toast */ } } })] }); });
 }
+/** Change history of a row (who changed what and when). */
 async function historyPanel(entity, row) {
   const r = await api.get(`api/e/${entity}/${row.id}/history`, { silent: true }).catch(() => ({ history: [] }));
-  const val = (f, v) => { const fd = sch(entity).fields[f]; if (v === null || v === undefined || v === "") return "∅"; if (fd?.type === "enum") return optLabel(entity, f, v); if (fd?.type === "ref") return refLabel(fd.to, v); if (typeof v === "object") return JSON.stringify(v).slice(0, 40); return String(v).slice(0, 60); };
+  const val = (f, v) => { const fd = sch(entity).fields[f]; if (v === null || v === undefined || v === "") return "—"; if (fd?.type === "enum") return optLabel(entity, f, v); if (fd?.type === "ref") return refLabel(fd.to, v); if (typeof v === "object") return JSON.stringify(v).slice(0, 40); return String(v).slice(0, 60); };
   return h("ol.history", (r.history || []).map((x) => h("li", h("div", h("b", x.user), " ", h("span.nb-badge.nb-badge--white", x.action), " ", h("span.nb-caption", fmt.datetime(x.ts))),
     x.action === "update" ? h("ul", Object.entries(x.diff || {}).map(([f, [a, b]]) => h("li", h("span.nb-caption", fieldLabel(entity, f) + ": "), val(f, a), " → ", h("b", val(f, b))))) : null)));
 }

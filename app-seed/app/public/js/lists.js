@@ -6,9 +6,12 @@ import { btn, badge, statusBadge, statusColor, icon, confirmDialog, toast, empty
 import { openForm, remember, refLabel, labelFor } from "./forms.js";
 import { monthGrid } from "./calendar.js";
 
+/** Navigates to a hash route. */
 export const go = (hash) => { location.hash = hash; };
+/** Link to the detail page of a row. */
 export const detailHref = (entity, id) => `#/e/${entity}/${id}`;
 const sch = (e) => S.schema.entities[e];
+/** Whether the current user may write an entity. */
 export const canWrite = (e) => !!sch(e)?.canWrite;
 
 /** Cell content for a column. `refs` carries labels for reference fields. */
@@ -24,7 +27,7 @@ export function cell(entity, col, row) {
     case "date": return fmt.date(v);
     case "datetime": return fmt.datetime(v);
     case "enum": return statusBadge(entity, col, v);
-    case "bool": return v ? badge("✓", "green", "nb-badge--sq") : "";
+    case "bool": return v ? badge(icon("ok"), "green", "nb-badge--sq") : "";
     case "ref": return refLabel(fd.to, v);
     case "tags": return (v || []).map((x) => badge(x, "white"));
     case "secret": return "••••";
@@ -35,6 +38,7 @@ export function cell(entity, col, row) {
 }
 const isNum = (fd) => fd && ["money", "num", "int", "pct"].includes(fd.type);
 
+/** The generic list of an entity: search, filters, sort, paging, boards and calendars, create button, row actions and CSV export, driven by the schema. */
 export function entityList(opts) {
   const { entity, filters = {}, create, compact = false, hideCols = [], limit = compact ? 25 : 50, onOpen, extraActions, canCreate = true, showSearch = !compact, views, emptyText, rowActions = true, onChange, hideToolbar } = opts;
   const ent = sch(entity); if (!ent) return h("div.nb-alert.nb-alert--error", `?${entity}`);
@@ -63,7 +67,7 @@ export function entityList(opts) {
 
   function drawTable() {
     if (!state.rows.length) return emptyState(emptyText || t("empty_list"), canCreate && ent.canWrite && btn(t("new"), { ico: "plus", onclick: () => toolbarAdd() }));
-    const th = cols.map((c) => { const fd = ent.fields[c]; const asc = state.sort === c, desc = state.sort === `-${c}`; return h("th", { class: ["sortable", isNum(fd) && "num"], "aria-sort": asc ? "ascending" : desc ? "descending" : "none", tabindex: "0", onclick: () => { state.sort = asc ? `-${c}` : c; reload(); }, onkeydown: (e) => { if (e.key === "Enter") e.target.click(); } }, fieldLabel(entity, c), (asc || desc) && h("span", asc ? " ▲" : " ▼")); });
+    const th = cols.map((c) => { const fd = ent.fields[c]; const asc = state.sort === c, desc = state.sort === `-${c}`; return h("th", { class: ["sortable", isNum(fd) && "num"], "aria-sort": asc ? "ascending" : desc ? "descending" : "none", tabindex: "0", onclick: () => { state.sort = asc ? `-${c}` : c; reload(); }, onkeydown: (e) => { if (e.key === "Enter") e.target.click(); } }, fieldLabel(entity, c), (asc || desc) && icon(asc ? "up" : "down", "sort")); });
     const trs = state.rows.map((r) => h("tr", { "data-clickable": "1", tabindex: "0", onclick: (e) => { if (e.target.closest("button,a")) return; (onOpen || ((x) => go(detailHref(entity, x.id))))(r); }, onkeydown: (e) => { if (e.key === "Enter" && !e.target.closest("button,a")) e.currentTarget.click(); } },
       cols.map((c, i) => h("td", { class: isNum(ent.fields[c]) && "num" }, i === 0 ? h("strong", cell(entity, c, r)) : cell(entity, c, r))),
       rowActions && ent.canWrite && h("td.actions", btn("", { ico: "edit", sm: true, kind: "secondary", title: t("edit"), onclick: async () => { const row = (await entityApi.get(entity, r.id)).row; const saved = await openForm(entity, { row }); if (saved) { onChange?.(); reload(); } } }), " ", btn("", { ico: "trash", sm: true, kind: "danger", title: t("delete"), onclick: async () => { if (await confirmDialog(t("confirm_delete", { name: labelFor(ent, r) }), { danger: true, ok: t("delete") })) { try { await entityApi.remove(entity, r.id); toast("deleted"); onChange?.(); reload(); } catch { /* toast */ } } } }))));

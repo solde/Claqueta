@@ -9,7 +9,7 @@ description: Escaleta, minutaje, guion de programas de televisión y radio, relo
 - Ritmo: alterna intensidad (entrevista larga ↔ pieza corta), coloca el «gancho» antes de cada pausa, cierra con avance del próximo programa. En directo reserva **colchón** (30-90 s) elástico en un bloque que se pueda estirar/recortar.
 - En directo los bloques con **hora fija** (conexiones, publicidad, hora en punto) mandan: el resto se ajusta.
 
-## En Collado
+## En Claqueta
 - Los bloques viven en `rundown_items` (episodio, posición, bloque, título, tipo, duración en segundos, responsable, hora fija, contenido, notas). `collado-api report rundown episode=N` devuelve hora de inicio de cada bloque, total, diferencia con el objetivo y avisos de huecos/solapes con las horas fijas.
 - Crea varios bloques de una vez: `collado-api batch rundown_items '[{"episode_id":N,"block":"Bloque 1","title":"Cabecera","kind":"intro","duration_sec":45,"position":10}, …]'` (posiciones de 10 en 10).
 - Copia de otro episodio: `collado-api action copy-rundown '{"from_episode_id":A,"to_episode_id":B}'`. Reordena: `action reorder-rundown '{"episode_id":N,"ids":[…]}'`.

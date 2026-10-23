@@ -31,6 +31,7 @@ export async function ganttView(programId) {
   const viol = g.tasks.filter((x) => x.violates.length);
   return h("div.stack", viol.length ? h("div.nb-alert.nb-alert--warn", icon("warn"), t("gantt_violations", { n: viol.length })) : null, h("div.gantt", svg), h("div.legend", h("span", h("i.c-red"), t("critical_path")), h("span", h("i.c-blue"), t("normal")), h("span", h("i.c-green"), t("done_m")), h("span", h("i.c-yellow"), entName("milestones"))));
 }
+/** Gantt chart of a programme's milestones with dependencies and critical path. */
 export async function ganttPage(root, m, params) {
   const pid = params.get("program"); root.append(pageHead(t("nav_gantt"), null, null));
   const picker = await programPicker(pid, (v) => go(v ? `#/gantt?program=${v}` : "#/gantt")); root.append(h("div", { style: { marginBottom: "16px" } }, picker));
@@ -51,11 +52,11 @@ export async function masterCalendar(root, m, params) {
     const f = program ? { "f.program_id": program } : {}; const get = (e, extra = {}) => (can(e) ? api.get(`api/e/${e}${qs({ ...f, limit: 500, refs: 0, ...extra })}`, { silent: true }).then((r) => r.rows).catch(() => []) : Promise.resolve([]));
     const [eps, bks, mss, tks, cts, bcs] = await Promise.all([get("episodes"), get("bookings"), get("milestones"), get("tasks", { "f.status": "!=done" }), get("contracts", { "f.status": "in:active|signing" }), get("broadcasts")]);
     const ev = [];
-    for (const e of eps) { if (e.shoot_date) ev.push({ date: e.shoot_date, label: `🎬 E${e.number}`, color: "blue", onclick: () => go(`#/e/episodes/${e.id}`) }); if (e.delivery_due) ev.push({ date: e.delivery_due, label: `🚚 E${e.number}`, color: "orange", onclick: () => go(`#/e/episodes/${e.id}`) }); if (e.air_date) ev.push({ date: e.air_date, label: `📡 E${e.number}`, color: "green", onclick: () => go(`#/e/episodes/${e.id}`) }); }
+    for (const e of eps) { if (e.shoot_date) ev.push({ date: e.shoot_date, icon: "reel", label: `E${e.number}`, color: "blue", onclick: () => go(`#/e/episodes/${e.id}`) }); if (e.delivery_due) ev.push({ date: e.delivery_due, icon: "truck", label: `E${e.number}`, color: "orange", onclick: () => go(`#/e/episodes/${e.id}`) }); if (e.air_date) ev.push({ date: e.air_date, icon: "antenna", label: `E${e.number}`, color: "green", onclick: () => go(`#/e/episodes/${e.id}`) }); }
     for (const b of bks) if (b.status !== "cancelled") ev.push({ date: b.start.slice(0, 10), end: b.end.slice(0, 10), label: `${b.start.slice(11, 16)} ${b.title}`, color: b.status === "confirmed" ? "pink" : "white", onclick: () => go(`#/e/bookings/${b.id}`) });
-    for (const x of mss) ev.push({ date: x.start_date, end: x.end_date || undefined, label: `🚩 ${x.title}`, color: "yellow", onclick: () => go(`#/e/milestones/${x.id}`) });
-    for (const x of tks) if (x.due) ev.push({ date: x.due, label: `✅ ${x.title}`, color: "white", onclick: () => go(`#/e/tasks/${x.id}`) });
-    for (const x of cts) if (x.end_date) ev.push({ date: x.end_date, label: `📝 ${x.title}`, color: "red", onclick: () => go(`#/e/contracts/${x.id}`) });
+    for (const x of mss) ev.push({ date: x.start_date, end: x.end_date || undefined, icon: "flag", label: x.title, color: "yellow", onclick: () => go(`#/e/milestones/${x.id}`) });
+    for (const x of tks) if (x.due) ev.push({ date: x.due, icon: "check", label: x.title, color: "white", onclick: () => go(`#/e/tasks/${x.id}`) });
+    for (const x of cts) if (x.end_date) ev.push({ date: x.end_date, icon: "contract", label: x.title, color: "red", onclick: () => go(`#/e/contracts/${x.id}`) });
     return monthGrid({ events: ev }).el;
   }
   async function timelineView(kind) {
@@ -78,7 +79,7 @@ export async function masterCalendar(root, m, params) {
       tl.querySelector(".tl").style.setProperty("--cols", 14);
       for (const c of tl.querySelectorAll(".tl__cells")) c.style.setProperty("--cols", 14);
       wrap.replaceChildren(h("div.nb-row.between", { style: { marginBottom: "12px" } }, h("div.nb-row", btn("", { ico: "back", sm: true, kind: "secondary", onclick: () => { from = addDays(from, -7); render(); } }), btn(t("today"), { sm: true, kind: "secondary", onclick: () => { from = mondayOf(todayIso()); render(); } }), btn("", { ico: "next", sm: true, kind: "secondary", onclick: () => { from = addDays(from, 7); render(); } }), h("span.nb-caption", `${fmt.date(from)} → ${fmt.date(to)}`)), conf.length ? badge(`${conf.length} ${t("conflicts")}`, "red") : badge(t("no_conflicts"), "green")),
-        conf.length ? h("ul.alertlist", { style: { marginBottom: "12px" } }, conf.slice(0, 6).map((c) => h("li", badge(c.severity === "high" ? "!!" : "!", c.severity === "high" ? "red" : "orange", "nb-badge--sq"), h("span", `${t("conflict." + c.kind)} · ${c.resource || c.person || ""} · ${c.a.label}${c.b ? " ↔ " + c.b.label : ""}`)))) : null, tl);
+        conf.length ? h("ul.alertlist", { style: { marginBottom: "12px" } }, conf.slice(0, 6).map((c) => h("li", badge(c.severity === "high" ? "!!" : "!", c.severity === "high" ? "red" : "orange", "nb-badge--sq"), h("span", `${t("conflict." + c.kind)} · ${c.resource || c.person || ""} · ${c.a.label}${c.b ? " / " + c.b.label : ""}`)))) : null, tl);
     }
     await render(); return wrap;
   }
@@ -89,13 +90,14 @@ export async function masterCalendar(root, m, params) {
 export async function rundownIndex(root) {
   root.append(pageHead(t("nav_rundowns"), t("rundowns_help")), entityList({ entity: "episodes", columns: ["program_id", "number", "title", "status", "air_date", "duration_target"], onOpen: (r) => go(`#/rundown/${r.id}`), canCreate: false, rowActions: false }));
 }
+/** Rundown editor of an episode: blocks, durations and running time against the target. */
 export async function rundownEditor(root, m) {
   const epId = Number(m[1]); const [epr, items] = await Promise.all([entityApi.get("episodes", epId), api.get(`api/e/rundown_items?f.episode_id=${epId}&sort=position&limit=500&refs=0`)]);
   const ep = epr.row; remember(epr.refs); const canEdit = sch("rundown_items").canWrite; let rows = items.rows;
   const list = h("div.rd"); const sum = h("div.rd__sum"); const timeEls = {};
   const kinds = sch("rundown_items").fields.kind.options;
-  const refreshTiming = async () => { const r = await api.get(`api/reports/rundown?episode=${epId}`, { silent: true }).catch(() => null); if (!r) return; for (const it of r.items) { const c = timeEls[it.id]; if (c) { c.time.textContent = it.start; c.note.textContent = it.note ? (it.note.startsWith("gap") ? `⏸ +${it.note.split(":")[1]}s` : `⚠ −${it.note.split(":")[1]}s`) : ""; } }
-    const diff = r.diff_sec; sum.replaceChildren(h("span", `${t("total")}: ${fmt.duration(r.total_sec)}`), r.target_sec ? h("span", `${t("target")}: ${fmt.duration(r.target_sec)}`) : null, r.target_sec ? badge(`${diff > 0 ? "+" : ""}${fmt.duration(Math.abs(diff))} ${diff > 0 ? t("over") : diff < 0 ? t("under") : "✓"}`, diff === 0 ? "green" : Math.abs(diff) > 60 ? "red" : "orange") : null, r.blocks.length > 1 ? h("span.nb-caption", r.blocks.map((b) => `${b.block || "—"}: ${fmt.duration(b.sec)}`).join(" · ")) : null); };
+  const refreshTiming = async () => { const r = await api.get(`api/reports/rundown?episode=${epId}`, { silent: true }).catch(() => null); if (!r) return; for (const it of r.items) { const c = timeEls[it.id]; if (c) { c.time.textContent = it.start; c.note.textContent = it.note ? (it.note.startsWith("gap") ? `+${it.note.split(":")[1]}s` : `−${it.note.split(":")[1]}s`) : ""; } }
+    const diff = r.diff_sec; sum.replaceChildren(h("span", `${t("total")}: ${fmt.duration(r.total_sec)}`), r.target_sec ? h("span", `${t("target")}: ${fmt.duration(r.target_sec)}`) : null, r.target_sec ? badge(`${diff > 0 ? "+" : ""}${fmt.duration(Math.abs(diff))} ${diff > 0 ? t("over") : diff < 0 ? t("under") : "OK"}`, diff === 0 ? "green" : Math.abs(diff) > 60 ? "red" : "orange") : null, r.blocks.length > 1 ? h("span.nb-caption", r.blocks.map((b) => `${b.block || "—"}: ${fmt.duration(b.sec)}`).join(" · ")) : null); };
   const patch = async (it, field, val) => { try { const u = await entityApi.update("rundown_items", it.id, { [field]: val, rev: it.rev }, field === "status" ? "rundown" : undefined); Object.assign(it, u); refreshTiming(); } catch { draw(); } };
   const edit = async (it) => { const row = (await entityApi.get("rundown_items", it.id)).row; const s = await openForm("rundown_items", { row, hide: ["episode_id", "program_id", "position"] }); if (s) load(); };
   let dragId = null;

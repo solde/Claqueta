@@ -2,9 +2,11 @@
 import { toast } from "./ui.js";
 import { queueOffline } from "./offline.js";
 
+/** An API failure with its HTTP status, stable error code (the server's `error`) and detail. */
 export class ApiError extends Error { constructor(status, code, detail) { super(code); this.status = status; this.code = code; this.detail = detail; } }
 const HEADERS = { "x-requested-with": "collado" };
 
+/** One fetch with JSON in/out, the CSRF header and same-origin credentials; a 401 reloads the page, network errors are queued when `offlineKey` is given, and failures raise ApiError (and a toast unless `silent`). */
 async function request(method, url, body, { raw, silent, offlineKey } = {}) {
   const opts = { method, headers: { ...HEADERS }, credentials: "same-origin" };
   if (body !== undefined && !(body instanceof Blob) && !(body instanceof ArrayBuffer)) { opts.headers["content-type"] = "application/json"; opts.body = JSON.stringify(body); } else if (body !== undefined) opts.body = body;
@@ -20,11 +22,14 @@ async function request(method, url, body, { raw, silent, offlineKey } = {}) {
   if (!res.ok) { const err = new ApiError(res.status, data?.error || `http_${res.status}`, data?.detail); if (!silent) toast(err, "error"); throw err; }
   return data;
 }
+/** Verbs over `request` (get, post, patch, put, del, raw). All URLs are relative: the app lives under /app/ behind the gateway. */
 export const api = {
   get: (u, o) => request("GET", u, undefined, o), post: (u, b, o) => request("POST", u, b ?? {}, o), patch: (u, b, o) => request("PATCH", u, b, o), put: (u, b, o) => request("PUT", u, b, o), del: (u, o) => request("DELETE", u, undefined, o),
   raw: (m, u, b) => request(m, u, b, { raw: true }),
 };
+/** Object to a query string, skipping empty values (the result starts with ? or is empty). */
 export const qs = (o) => { const p = new URLSearchParams(); for (const [k, v] of Object.entries(o || {})) if (v !== undefined && v !== null && v !== "") p.set(k, v); const s = p.toString(); return s ? "?" + s : ""; };
+/** The generic entity endpoints (list, get, create, update with optimistic `rev`, remove). */
 export const entityApi = {
   list: (entity, params) => api.get(`api/e/${entity}${qs(params)}`),
   get: (entity, id) => api.get(`api/e/${entity}/${id}`),

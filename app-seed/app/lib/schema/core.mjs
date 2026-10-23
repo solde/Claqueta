@@ -2,7 +2,9 @@
 import { f, req } from "./dsl.mjs";
 
 const DESKTOP = process.env.COLLADO_DESKTOP === "1";   // projects have their own local folder only in the desktop build
+/** Kinds of programme (format families) that workflow templates and defaults are keyed by. */
 export const PROGRAM_KINDS = ["magazine", "news", "gameshow", "documentary", "live_radio", "podcast", "series", "entertainment", "other"];
+/** Lifecycle of an episode, in order: planned, script, recorded, edited, qc, delivered, aired. */
 export const EPISODE_STATUS = ["planned", "script", "recorded", "edited", "qc", "delivered", "aired"];
 
 export default {

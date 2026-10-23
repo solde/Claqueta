@@ -1,3 +1,4 @@
+// Unit tests of the document engine (app/lib/docs): Markdown parsing, variables, every built-in template in three languages, data sources and permissions, and the DOCX, XLSX and PDF writers.
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";

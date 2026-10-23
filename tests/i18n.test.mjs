@@ -1,3 +1,4 @@
+// Consistency tests of the dictionaries: every entity, field and option has a label in es, ca and en, every UI key exists, and the shell and app share the same style kit.
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";

@@ -10,6 +10,7 @@ import { barChart, hbars } from "../charts.js";
 
 const sch = (e) => S.schema.entities[e]; const has = (p) => S.me.perms.includes("*") || S.me.perms.includes(p); const can = (e) => !!sch(e);
 
+/** The programmes page: cards or table, with the create dialog. */
 export async function programList(root, m, params) {
   const rows = await api.get("api/e/programs?limit=200&sort=name"); remember(rows.refs);
   const stats = await api.get("api/e/episodes?limit=2000&refs=0").catch(() => ({ rows: [] }));
@@ -30,7 +31,9 @@ export async function programList(root, m, params) {
 
 // ---- workspace ---------------------------------------------------------------------------------------------------------------------
 const section = (title, entity, progId, o = {}) => ({ title, entity, o });
+/** The generic list of an entity limited to one programme. */
 function listFor(entity, progId, o = {}) { return entityList({ entity, filters: { [sch(entity).program === "id" ? "id" : (sch(entity).program || "program_id")]: progId }, create: { defaults: { program_id: progId }, lock: ["program_id"], stay: true }, hideCols: ["program_id"], ...o }); }
+/** Tabs inside a programme workspace. */
 function subTabs(root, items, progId, initial) {
   const avail = items.filter((i) => can(i.entity)); if (!avail.length) return h("div"); let cur = initial && avail.find((i) => i.entity === initial)?.entity || avail[0].entity; const body = h("div");
   const bar = h("div.tabs"); const draw = () => { bar.replaceChildren(...avail.map((i) => h("button.nb-tab", { type: "button", "aria-selected": String(i.entity === cur), onclick: () => { cur = i.entity; draw(); } }, icon(sch(i.entity).icon), entName(i.entity, true)))); body.replaceChildren(i_content(avail.find((i) => i.entity === cur))); };
@@ -38,6 +41,7 @@ function subTabs(root, items, progId, initial) {
   draw(); return h("div", bar, body);
 }
 
+/** The workspace of one programme: summary and one tab per area (episodes, planning, budget, documents...). */
 export async function workspace(root, m, params) {
   const id = Number(m[1]); let tab = m[2] || "overview";
   let data; try { data = await entityApi.get("programs", id); } catch { root.append(emptyState(t("not_found"))); return; }
@@ -106,6 +110,7 @@ const BUILDERS = {
     return h("div.stack", card(form.el), sch("programs").canWrite && h("div.nb-row", save, del));
   },
 };
+/** Planned versus actual cost per episode of a programme. */
 async function varianceBlock(id) {
   const seasons = await api.get(`api/e/seasons?f.program_id=${id}&limit=50&refs=0`, { silent: true }).catch(() => ({ rows: [] }));
   const r = await api.get(`api/reports/episode-variance?program=${id}`, { silent: true }).catch(() => null);

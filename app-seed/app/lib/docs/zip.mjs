@@ -1,7 +1,9 @@
 // Tiny ZIP writer (deflate) for OOXML containers: no dependencies.
 import zlib from "node:zlib";
 const T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+/** CRC-32 of a buffer (the checksum the ZIP format requires). */
 export function crc32(buf) { let c = 0xffffffff; for (let i = 0; i < buf.length; i++) c = T[(c ^ buf[i]) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; }
+/** Builds a ZIP archive (stored or deflated entries) from { name, data } entries; what DOCX, XLSX and exports are packaged with. */
 export function zip(entries) {
   const locals = [], central = []; let offset = 0;
   const dt = new Date(), time = (dt.getHours() << 11) | (dt.getMinutes() << 5) | (dt.getSeconds() >> 1), day = ((dt.getFullYear() - 1980) << 9) | ((dt.getMonth() + 1) << 5) | dt.getDate();

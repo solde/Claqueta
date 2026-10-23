@@ -9,12 +9,16 @@ import { IS_WIN, which } from "./platform.mjs";
 const SCROLLBACK = 400_000;   // bytes kept per session (xterm.js re-renders them on attach)
 const NOT_INSTALLED = `Claude Code no está instalado en este equipo. Instálalo una vez (${IS_WIN ? "irm https://claude.ai/install.ps1 | iex" : "curl -fsSL https://claude.ai/install.sh | bash"}) y vuelve a abrir la consola. Hace falta internet solo para instalarlo y para conversar con Claude; el resto de Collado funciona sin conexión.`;
 
+/** Consoles without tmux (desktop, Windows included): each session is a node-pty process owned by agentd with a scrollback buffer replayed to every new viewer; closing the window only detaches a viewer. Same interface as Consoles. */
 export class PtyConsoles {
   constructor({ users, agentCmd = "claude", shellCmd = "", maxUsers = 6, idleHours = 12, log = () => {} }) {
     Object.assign(this, { users, agentCmd, shellCmd, maxUsers, idleMs: idleHours * 3600e3, log }); this.sessions = new Map(); this.seen = new Map();
   }
+  /** Session key `<user>/<name>`. */
   key(u, name) { return `${u.name}/${name}`; }
+  /** Whether the session's process is alive. */
   hasSession(u, name) { const s = this.sessions.get(this.key(u, name)); return !!s && s.alive; }
+  /** Users with a live session. */
   active() { return this.users.list().filter((u) => ["claude", "shell"].some((n) => this.hasSession(u, n))); }
   #resolve(u, cmd) { return which(cmd, this.users.env(u).PATH.split(path.delimiter)); }
   #shell(u) {
@@ -27,6 +31,7 @@ export class PtyConsoles {
     if (!spec.file) return null;
     return pty.spawn(spec.file, spec.args, { name: "xterm-256color", cwd: path.join(this.users.homeOf(u.name), "work"), env: this.users.env(u), cols, rows, ...(IS_WIN ? { useConpty: true } : {}) });
   }
+  /** Starts the session if it is not alive (Claude resumes with --continue, falling back to a new conversation), refused beyond the user cap; returns the session. */
   ensure(u, name, cols = 120, rows = 32) {
     let s = this.sessions.get(this.key(u, name));
     if (s?.alive) return s;
@@ -75,5 +80,6 @@ export class PtyConsoles {
   }
   /** Ends a session (and forgets its screen) so the next attach starts a fresh one. */
   reset(u, name) { const k = this.key(u, name), s = this.sessions.get(k); if (!s) return; s.alive = false; try { s.proc?.kill(); } catch { /* gone */ } for (const v of s.views) { try { v.exit(); } catch { /* closed */ } } this.sessions.delete(k); }
+  /** Ends every session (shutdown). */
   killAll() { for (const s of this.sessions.values()) { s.alive = false; try { s.proc?.kill(); } catch { /* gone */ } } this.sessions.clear(); }
 }

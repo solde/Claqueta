@@ -21,6 +21,7 @@ hook("budget_lines", "before", (op, ctx, data, ex) => {
   if (op === "update" && ex) { const b = rawGet("budgets", ex.budget_id); if (b?.status === "approved") throw bad("budget_locked"); }
   if (op === "delete" && ex) { const b = rawGet("budgets", ex.budget_id); if (b?.status === "approved") throw bad("budget_locked"); }
 });
+/** Recomputes subtotal, VAT and total of a budget from its lines and contingency (money in cents). */
 export function recalcBudget(id) {
   const b = rawGet("budgets", id); if (!b) return;
   const lines = q.all("SELECT amount, vat_rate FROM budget_lines WHERE budget_id = ?", id);
@@ -84,6 +85,7 @@ hook("client_invoices", "before", (op, ctx, data, ex) => {
   if (op === "create" && !data.due_date && data.date) { const c = rawGet("partners", data.client_id); data.due_date = addDays(data.date, c?.payment_days ?? 30); }
 });
 hook("client_invoices", "after", (op, ctx, row) => { if (op !== "delete" && row.plan_id) q.run("UPDATE billing_plan SET status = 'invoiced' WHERE id = ?", row.plan_id); });
+/** Sets paid amount and status (issued / partial / paid) of a client invoice from the payments that point to it. */
 export function recalcInvoice(id) {
   const inv = rawGet("client_invoices", id); if (!inv || ["draft", "void"].includes(inv.status)) return;
   const paid = q.get("SELECT COALESCE(SUM(amount), 0) AS s FROM payments WHERE invoice_id = ?", id).s;
@@ -95,6 +97,7 @@ hook("payments", "after", (op, ctx, row) => recalcInvoice(row.invoice_id));
 
 // ---- people & time ----------------------------------------------------------------------------------------------------------------------
 const overlap = (a1, a2, b1, b2) => Math.max(0, Math.min(a2, b2) - Math.max(a1, b1));
+/** Worked, overtime and night hours of a timesheet entry according to the person's collective agreement; handles shifts that cross midnight. */
 export function calcTimesheet(ts, ag) {
   const s = hhmmToMin(ts.start); let e = hhmmToMin(ts.end); if (e <= s) e += 1440;
   const worked = Math.max(0, e - s - (ts.break_min || 0)), maxD = (ag?.max_daily_hours ?? 8) * 60;
@@ -102,6 +105,7 @@ export function calcTimesheet(ts, ag) {
   const night = nt <= nf ? overlap(s, e, nf, 1440 + nt) + overlap(s, e, nf - 1440, nt) : overlap(s, e, nf, nt);
   return { hours: round2(worked / 60), overtime: round2(Math.max(0, worked - maxD) / 60), night_hours: round2(Math.min(night, worked) / 60), startMin: s, endMin: e };
 }
+/** Stores computed hours and the rest-period check of a timesheet, comparing with the person's previous shift. */
 function recalcTimesheet(id) {
   const t = rawGet("timesheets", id); if (!t) return;
   const person = rawGet("people", t.person_id), ag = person?.agreement_id ? rawGet("agreements", person.agreement_id) : null;
@@ -236,6 +240,7 @@ export async function applyTemplate(ctx, programId) {
   if (t.budget_template_id) budget = await cloneBudget(ctx, t.budget_template_id, { program_id: programId, season_id: season.id, name: "Presupuesto", kind: "budget", version: 1 });
   return { season, milestones: made.length, budget };
 }
+/** Copies a budget and all its lines into a new draft (optionally for another programme or season). */
 export async function cloneBudget(ctx, id, over = {}) {
   const b = rawGet("budgets", id); if (!b) throw bad("no_budget");
   const nb = await create(ctx, "budgets", { program_id: over.program_id ?? b.program_id, season_id: over.season_id ?? b.season_id, name: over.name ?? b.name, kind: over.kind ?? b.kind, version: over.version ?? 1,
@@ -245,6 +250,7 @@ export async function cloneBudget(ctx, id, over = {}) {
       unit_cost: l.unit_cost / 100, vat_rate: l.vat_rate, irpf_rate: l.irpf_rate, account: l.account, notes: l.notes });
   return getRow(ctx, "budgets", nb.id);
 }
+/** Creates the next version of a budget (same name, version + 1) as a draft copy; approved budgets are locked and change only through new versions. */
 export async function newBudgetVersion(ctx, id) {
   const b = rawGet("budgets", id); if (!b) throw bad("no_budget");
   const max = q.get("SELECT COALESCE(MAX(version),0) AS v FROM budgets WHERE COALESCE(program_id,0) = COALESCE(?,0) AND name = ?", b.program_id, b.name).v;

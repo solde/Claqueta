@@ -6,6 +6,7 @@ import fs from "node:fs";
 import { NODE_ENV, linkDir } from "./platform.mjs";
 
 const WORKER = path.join(path.dirname(fileURLToPath(import.meta.url)), "fsops.mjs");
+/** Backend of the file manager: every operation runs `fsops.mjs` as the person in a child process (so the operating system, not our code, enforces what they can touch); this class authenticates, routes, streams and caps uploads. */
 export class Files {
   constructor({ users, maxUploadMb = 200 }) { this.users = users; this.maxUpload = maxUploadMb * 1048576; }
   #spawn(u, op, args) {

@@ -10,8 +10,10 @@ import crypto from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import { seal, open, subkeys, objectName, masterFrom, newSalt, KDF } from "./crypto.mjs";
 
+/** A sync failure with a stable code (weak_passphrase, bad_passphrase, lease_held, remote_newer, object_corrupt...) and extra detail for the UI. */
 export class SyncError extends Error { constructor(code, extra = {}) { super(code); this.code = code; Object.assign(this, extra); } }
 
+/** Lease length (20 min), largest file synced (256 MB) and number of backup folders kept (5). */
 export const LEASE_MS = 20 * 60e3, MAX_FILE = 256 * 1048576, KEEP_BACKUPS = 5;
 const SKIP_DIRS = new Set(["node_modules", ".npm-cache", ".npm-global", ".cache", ".Trash", "Proyectos", ".sync-staging"]);   // Proyectos/ holds links to folders of THIS computer
 const SKIP_FILES = /(-wal|-shm|\.tmp|\.lock)$|^\.DS_Store$|^Thumbs\.db$|^\.credentials\.json$|^token$/;   // credentials and API tokens never leave the computer
@@ -25,6 +27,7 @@ export async function initRemote(provider, passphrase) {
   await provider.write("config.json", Buffer.from(JSON.stringify({ v: 1, kdf: KDF, salt: salt.toString("base64"), check: seal(k.enc, Buffer.from("collado")).toString("base64") })));
   return master;
 }
+/** Opens an existing cloud side with the passphrase (verifying the key check); throws bad_passphrase when it is wrong. */
 export async function unlockRemote(provider, passphrase) {
   const raw = await provider.read("config.json"); if (!raw) throw new SyncError("no_remote");
   let cfg; try { cfg = JSON.parse(raw.toString("utf8")); } catch { throw new SyncError("remote_corrupt"); }
@@ -32,19 +35,25 @@ export async function unlockRemote(provider, passphrase) {
   try { if (open(subkeys(master).enc, Buffer.from(cfg.check, "base64")).toString() !== "collado") throw 0; } catch { throw new SyncError("bad_passphrase"); }
   return master;
 }
+/** Whether the cloud already has a Collado workspace (config.json present). */
 export const remoteExists = async (provider) => !!(await provider.read("config.json"));
 
+/** SHA-256 of a file, streamed. */
 function hashFile(abs) {
   return new Promise((res, rej) => { const h = crypto.createHash("sha256"); fs.createReadStream(abs).on("data", (d) => h.update(d)).on("end", () => res(h.digest("hex"))).on("error", rej); });
 }
+/** Consistent copy of a live SQLite database with VACUUM INTO (never a half-written file); a plain copy when it is not a database. */
 function snapshotDb(src, dest) {
   fs.mkdirSync(path.dirname(dest), { recursive: true });
   try { const db = new DatabaseSync(src, { readOnly: true }); try { db.exec(`VACUUM INTO '${dest.replace(/'/g, "''")}'`); } finally { db.close(); } }
   catch { fs.copyFileSync(src, dest); }   // not a database after all (or a read-only quirk): a plain copy
 }
+/** Moves a file, falling back to copy-and-delete across devices. */
 async function mv(from, to) { await fsp.mkdir(path.dirname(to), { recursive: true }); try { await fsp.rename(from, to); } catch (e) { if (e.code !== "EXDEV") throw e; await fsp.cp(from, to, { recursive: true }); await fsp.rm(from, { recursive: true, force: true }); } }
+/** Runs `fn` over `items` with at most `n` in parallel. */
 async function pool(items, n, fn) { let i = 0; await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => { while (i < items.length) { const k = i++; await fn(items[k], k); } })); }
 
+/** Content-addressed, encrypted two-way sync of the workspace with any provider: scan (with databases snapshotted), push (upload only the objects the cloud lacks, new manifest generation) and pull (download and verify into staging, back up what is replaced, then swap in), under a one-computer-at-a-time lease. */
 export class SyncEngine {
   /** roots: [{ ns, dir, sqlite?: true }]  ·  device: { id, name }  ·  statePath: JSON file with what was synced last time  ·  backupsDir: where overwritten files go */
   constructor({ provider, master, device, roots, statePath, backupsDir, log = () => {}, onProgress = () => {}, now = () => Date.now(), concurrency = 3, maxFile = MAX_FILE }) {
@@ -61,6 +70,7 @@ export class SyncEngine {
     if (rel.split("/").some((s) => s === ".." || s === "") || (full !== root.dir && !full.startsWith(root.dir + path.sep))) throw new SyncError("bad_path");
     return full;
   }
+  /** Deletes the temporary database snapshots. */
   cleanup() { if (this.tmp) { fs.rmSync(this.tmp, { recursive: true, force: true }); this.tmp = null; } }
 
   // ---- what is on this computer ------------------------------------------------------------------------------------------------------------------------
@@ -93,6 +103,7 @@ export class SyncEngine {
     for (const [k, e] of out) e.k = k;
     this.skipped = skipped; return out;
   }
+  /** Replaces a live database entry by a consistent snapshot in a temporary folder. */
   snapshot(k, e) {   // k = logical path
     this.tmp ||= fs.mkdtempSync(path.join(os.tmpdir(), "collado-sync-")); const dest = path.join(this.tmp, ...k.split("/")); snapshotDb(e.src, dest); e.abs = dest; e.size = fs.statSync(dest).size; return dest;
   }
@@ -118,12 +129,15 @@ export class SyncEngine {
     const other = this.#leaseOf(m);
     return { exists: true, generation: m.generation, newer: m.generation > this.state.baseGeneration, savedAt: m.savedAt, device: m.device, lease: other ? { name: other.name, until: other.until } : null };
   }
+  /** Takes the lease for this computer for 20 minutes; throws lease_held when another computer has it (unless forced). */
   async acquireLease({ force = false } = {}) {
     const m = (await this.readManifest()) || { v: 1, generation: 0, files: {} }, other = this.#leaseOf(m);
     if (other && !force) throw new SyncError("lease_held", { by: other.name, until: other.until });
     m.lease = { device: this.device.id, name: this.device.name, until: this.now() + LEASE_MS }; await this.#writeManifest(m); return m;
   }
+  /** Extends this computer's lease. */
   async renewLease() { return this.acquireLease(); }
+  /** Gives the lease up (end of session). */
   async releaseLease() { const m = await this.readManifest(); if (m?.lease?.device === this.device.id) { delete m.lease; await this.#writeManifest(m); } }
 
   // ---- push: this computer -> cloud ---------------------------------------------------------------------------------------------------------------------

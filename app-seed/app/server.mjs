@@ -1,4 +1,4 @@
-// Collado app — TV / radio / podcast production management. Zero dependencies: node:http + node:sqlite, static frontend without a build step.
+// Claqueta app — TV / radio / podcast production management. Zero dependencies: node:http + node:sqlite, static frontend without a build step.
 // This is the part the agent is meant to change. Layout: lib/schema/* (data model), lib/engine.mjs (generic CRUD), lib/logic.mjs (rules), lib/reports.mjs, lib/docs/* (documents), public/* (UI).
 // Run by the supervisor (agentd) with PORT / HOST / DATA_DIR; it restarts this process whenever a file in this folder changes. See the managed agent instructions.
 import http from "node:http";

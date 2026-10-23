@@ -1,3 +1,4 @@
+// Unit tests of multi-organization isolation in the app (app/lib/db.mjs): separate databases, settings, sequences, encryption sub-keys and attachments per company.
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";

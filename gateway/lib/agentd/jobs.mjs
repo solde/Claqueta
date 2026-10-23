@@ -2,8 +2,10 @@
 import path from "node:path";
 import { spawn } from "node:child_process";
 
+/** Headless agent runs (`claude -p`) as a given person, with the same login and settings as their console; limited in parallel runs, one per person, with a timeout and an output cap. */
 export class Jobs {
   constructor({ users, claudeBin = "claude", jobCmd, max = 3, timeoutMs = 15 * 60e3, log = () => {} }) { Object.assign(this, { users, claudeBin, jobCmd, max, timeoutMs, log }); this.running = new Map(); }
+  /** Runs one generation and resolves { output } or { error } (busy, one job per user, not logged in, timeout). */
   async run({ id, user, perms, prompt, web = true }) {
     if (this.running.size >= this.max) return { error: "busy" };
     if ([...this.running.values()].some((j) => j.user === user)) return { error: "one_job_per_user" };
@@ -20,5 +22,6 @@ export class Jobs {
       child.stdin.on("error", () => {}); child.stdin.end(prompt);
     });
   }
+  /** Kills a running generation. */
   cancel(id) { this.running.get(id)?.child.kill("SIGKILL"); }
 }

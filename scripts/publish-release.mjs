@@ -11,19 +11,23 @@ import { sshSigner } from "./gitea-auth.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2), opt = (n, d) => { const i = args.indexOf(`--${n}`); return i >= 0 ? args[i + 1] : d; }, flag = (n) => args.includes(`--${n}`);
 const cfg = JSON.parse(fs.readFileSync(path.join(ROOT, "desktop", "update.config.json"), "utf8"));
+/** Gitea host, repository, tag and installer folder from the options and desktop/update.config.json. */
 const host = (opt("host", cfg.host)).replace(/\/$/, ""), repo = opt("repo", cfg.repo), tag = opt("tag"), dir = path.resolve(opt("dir", path.join(ROOT, "dist")));
 if (!tag || !/^v\d+\.\d+/.test(tag)) { console.error("usage: publish-release.mjs --tag vX.Y.Z [--dir dist]"); process.exit(2); }
 let token = process.env.GITEA_TOKEN; if (!token) { try { token = fs.readFileSync(path.join(os.homedir(), ".config", "claqueta", "gitea-token"), "utf8").trim(); } catch { /* none */ } }
 const sshKey = opt("ssh-key", process.env.GITEA_SSH_KEY), sign = !token && sshKey ? sshSigner({ keyFile: path.resolve(sshKey.replace(/^~(?=\/)/, os.homedir())) }) : null;
 if (!token && !sign && !flag("dry-run")) { console.error("no credentials: set GITEA_TOKEN, write it to ~/.config/claqueta/gitea-token, or pass --ssh-key <private key>"); process.exit(2); }
+/** Authorization headers: a token, or an HTTP signature made with an SSH key. */
 const authHeaders = (method, url) => (token ? { authorization: `token ${token}` } : sign ? sign(method, url) : {});
 const INSTALLER = /\.(dmg|exe|AppImage|deb|zip|tar\.gz)$/i;
 const files = fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => INSTALLER.test(f) && !/blockmap/.test(f) && fs.statSync(path.join(dir, f)).isFile()).sort() : [];
 if (!files.length) { console.error(`no installers in ${dir}`); process.exit(1); }
+/** Calls the repository's Gitea API and throws on an unexpected status. */
 const api = async (p, init = {}, ok = [200, 201]) => {
   const url = `${host}/api/v1/repos/${repo}${p}`, r = await fetch(url, { ...init, headers: { ...authHeaders(init.method || "GET", url), accept: "application/json", ...(init.headers || {}) } });
   if (!ok.includes(r.status)) throw new Error(`${init.method || "GET"} ${p} -> ${r.status} ${(await r.text()).slice(0, 200)}`); return r;
 };
+/** SHA-256 of a file (for SHA256SUMS.txt). */
 const sha = (f) => new Promise((res, rej) => { const h = crypto.createHash("sha256"); fs.createReadStream(f).on("data", (d) => h.update(d)).on("end", () => res(h.digest("hex"))).on("error", rej); });
 
 const sums = []; for (const f of files) sums.push(`${await sha(path.join(dir, f))}  ${f}`);
@@ -38,6 +42,7 @@ else {
 }
 const existing = new Map((rel.assets || []).map((a) => [a.name, a.id]));
 const sizes = new Map((rel.assets || []).map((a) => [a.name, a.size]));
+/** Uploads one installer as a release asset, replacing an asset of the same name. */
 const upload = async (name, blob, size) => {
   if (size !== undefined && sizes.get(name) === size) { console.log(`unchanged ${name}`); return; }   // same name and size already attached: do not upload it again
   if (existing.has(name)) await api(`/releases/${rel.id}/assets/${existing.get(name)}`, { method: "DELETE" }, [204]);

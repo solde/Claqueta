@@ -5,9 +5,12 @@ import pty from "@lydell/node-pty";
 import { which } from "./platform.mjs";
 
 const strip = (s) => s.replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, "").replace(/\x1b\[[0-9;?]*[ -\/]*[@-~]/g, "").replace(/\r/g, "");
+/** Automatic Claude Code login (desktop): runs `claude auth login` for the person in a pty, finds the authorisation link, and reports done, error or cancelled; offers a code box when the browser could not complete the flow. */
 export class ClaudeLogin {
   constructor({ users, isLoggedIn, onDone = () => {}, log = () => {}, bin = "claude" }) { Object.assign(this, { users, isLoggedIn, onDone, log, bin }); this.runs = new Map(); }
+  /** { state: idle|starting|waiting|done|error, url, error } of a person's login. */
   state(name) { const r = this.runs.get(name); return r ? { state: r.state, url: r.url, error: r.error } : { state: "idle" }; }
+  /** Starts the login unless one is already running. */
   async start(u) {
     const cur = this.runs.get(u.name); if (cur && (cur.state === "starting" || cur.state === "waiting")) return this.state(u.name);
     const env = this.users.env(u), file = which(this.bin, env.PATH.split(path.delimiter));
@@ -27,5 +30,6 @@ export class ClaudeLogin {
   }
   /** Fallback: the person pasted the code shown by the browser. */
   code(u, text) { const r = this.runs.get(u.name); if (!r?.proc || !/^[\w#.\-_\/+=]{6,400}$/.test(String(text).trim())) return false; r.proc.write(String(text).trim() + "\r"); return true; }
+  /** Cancels a running login. */
   cancel(u) { const r = this.runs.get(u.name); if (r?.proc) { r.cancelled = true; const p = r.proc; try { p.kill(); } catch { /* gone */ } setTimeout(() => { if (r.proc === p) { try { p.kill("SIGKILL"); } catch { /* gone */ } } }, 1500).unref?.(); } }
 }

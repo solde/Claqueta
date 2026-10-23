@@ -1,6 +1,6 @@
 {
   "name": "claqueta",
-  "version": "1.0.5",
+  "version": "1.0.8",
   "private": true,
   "type": "module",
   "description": "Claqueta: TV/radio/podcast production suite, offline desktop app for macOS, Windows and Linux",
@@ -17,7 +17,9 @@
     "dist:mac": "node scripts/vendor.mjs && electron-builder --mac",
     "dist:win": "node scripts/vendor.mjs && electron-builder --win",
     "dist:linux": "node scripts/vendor.mjs && electron-builder --linux",
-    "release": "node scripts/publish-release.mjs"
+    "release": "node scripts/publish-release.mjs",
+    "docs": "node scripts/docs-all.mjs",
+    "push": "node scripts/push-all.mjs"
   },
   "dependencies": {
     "@lydell/node-pty": "1.1.0",

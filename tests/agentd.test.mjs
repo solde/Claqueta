@@ -1,3 +1,4 @@
+// Unit tests of agentd building blocks (gateway/lib/agentd): derived keys and signed tokens, console users and their homes, and installing/upgrading the editable app from the seed.
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";

@@ -1,3 +1,4 @@
+// Unit tests of the cloud-sync providers and OAuth (desktop/sync/oauth.mjs, providers/*) against fake servers: PKCE flow, retries, Google Drive and OneDrive uploads and downloads.
 import test from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";

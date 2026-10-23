@@ -2,7 +2,7 @@
 import { create } from "../engine.mjs";
 
 const BRANDS = [
-  { name: "Collado", description: "Rojo REC con negro (por defecto)", primary: "#C8102E", accent: "#1C1F24", table_stripe: "#fbeeee", is_default: 1 },
+  { name: "Claqueta", description: "Rojo REC con negro (por defecto)", primary: "#C8102E", accent: "#1C1F24", table_stripe: "#fbeeee", is_default: 1 },
   { name: "Sobrio", description: "Grafito y rojo señal; portada minimalista", primary: "#222222", accent: "#c8321f", muted: "#555555", table_stripe: "#f2f2f2", cover: "minimal", font_heading: "Liberation Sans", font_body: "Liberation Sans" },
   { name: "Editorial", description: "Serif, granate y dorado; portada dividida", primary: "#5a1f2b", accent: "#b08d57", muted: "#6a5d5d", table_stripe: "#f7f1ea", cover: "split", font_heading: "Liberation Serif", font_body: "Liberation Serif", base_size: 11, line_height: 1.5 },
   { name: "Neobrutalista", description: "Mismo lenguaje que la aplicación: negro, rojo REC y bordes gruesos", primary: "#000000", accent: "#F01E2C", muted: "#333333", text_color: "#000000", table_head_bg: "#F01E2C", table_stripe: "#ffe6e3", cover: "full", font_heading: "Space Grotesk", font_body: "Space Grotesk", font_mono: "Space Mono",
@@ -398,16 +398,17 @@ Productora: {{company.legal_name}}
 ` },
 ];
 
+/** Installs the built-in brands and the ready-to-use document templates (dossier, bible, call sheet, budget, audience report, contracts...). */
 export async function seedDocs(ctx) {
   const ids = {};
   for (const b of BRANDS) { const row = await create(ctx, "brands", b); ids[b.name] = row.id; }
-  for (const t of TEMPLATES) await create(ctx, "doc_templates", { name: t.name, type: t.type, language: "es", description: t.description, body: t.body, variables: t.variables || [], options: t.options || {}, brand_id: ids.Collado, builtin: 1, key: t.key }, { internal: true });
+  for (const t of TEMPLATES) await create(ctx, "doc_templates", { name: t.name, type: t.type, language: "es", description: t.description, body: t.body, variables: t.variables || [], options: t.options || {}, brand_id: ids.Claqueta, builtin: 1, key: t.key }, { internal: true });
 }
 
 /** Existing installs: move the two built-in brands that still have the old colours to the REC red scheme (never touches brands the team edited). */
 export async function recolourBuiltinBrands(ctx) {
   const { q } = await import("../db.mjs"); const { update } = await import("../engine.mjs");
-  const OLD = { Collado: { primary: "#1f3a5f", accent: "#e0a100" }, Neobrutalista: { accent: "#FFDE59" } };
-  const NEW = { Collado: { primary: "#C8102E", accent: "#1C1F24", table_stripe: "#fbeeee", description: "Rojo REC con negro (por defecto)" }, Neobrutalista: { accent: "#F01E2C", table_head_bg: "#F01E2C", table_stripe: "#ffe6e3", description: "Mismo lenguaje que la aplicación: negro, rojo REC y bordes gruesos" } };
+  const OLD = { Claqueta: { primary: "#1f3a5f", accent: "#e0a100" }, Neobrutalista: { accent: "#FFDE59" } };
+  const NEW = { Claqueta: { primary: "#C8102E", accent: "#1C1F24", table_stripe: "#fbeeee", description: "Rojo REC con negro (por defecto)" }, Neobrutalista: { accent: "#F01E2C", table_head_bg: "#F01E2C", table_stripe: "#ffe6e3", description: "Mismo lenguaje que la aplicación: negro, rojo REC y bordes gruesos" } };
   for (const [name, old] of Object.entries(OLD)) { const b = q.get("SELECT * FROM brands WHERE name = ?", name); if (b && Object.entries(old).every(([k, v]) => String(b[k]).toLowerCase() === v.toLowerCase())) await update(ctx, "brands", b.id, NEW[name], { force: true }); }
 }

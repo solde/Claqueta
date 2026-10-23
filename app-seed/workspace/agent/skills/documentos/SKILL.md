@@ -1,21 +1,21 @@
 ---
 name: collado-documentos
-description: Producir documentos de alta calidad y totalmente personalizables (PDF, Word, HTML, Excel, PowerPoint) con la marca del equipo — Markdown de Collado con portada, índice, tablas, gráficos, bloques de datos vivos, columnas, avisos y firmas; plantillas, marcas, previsualización en imágenes y revisión. Úsala siempre que haya que crear, rellenar, personalizar o exportar un documento, informe, dossier, contrato, escaleta, presupuesto o presentación.
+description: Producir documentos de alta calidad y totalmente personalizables (PDF, Word, HTML, Excel, PowerPoint) con la marca del equipo — Markdown de Claqueta con portada, índice, tablas, gráficos, bloques de datos vivos, columnas, avisos y firmas; plantillas, marcas, previsualización en imágenes y revisión. Úsala siempre que haya que crear, rellenar, personalizar o exportar un documento, informe, dossier, contrato, escaleta, presupuesto o presentación.
 ---
-# Documentos profesionales con Collado
+# Documentos profesionales con Claqueta
 
 ## Flujo recomendado (sigue estos pasos)
 0. **Comprueba la caja de herramientas** (la primera vez en cada proyecto, y si algo falla): `collado-doc check --program N`. Te dice qué motor de PDF hay, si puedes ver las páginas como imagen (`pdftoppm`), si puedes convertir Word/Excel/PowerPoint a PDF para revisarlos (LibreOffice), si hay Python con `python-pptx`/`python-docx`/`openpyxl`, y si las fuentes de la marca están instaladas — con el **comando exacto** para instalar lo que falte en este sistema. Lo que falte y mejore la calidad se lo propones a la persona (no instales software del sistema sin su permiso); lo que no puedas comprobar, lo dices.
 1. **Elige el punto de partida**: `collado-doc templates` (dossier, bible, rundown, callsheet, broadcast-sheet, audience-report, budget, variance, weekly-status, minutes, sponsor, contract-image, contract-services, minor-authorisation, delivery, cue-sheet) y `collado-doc brands`. Si no hay plantilla, escribe tú el Markdown.
-2. **Redacta en Markdown de Collado** en la carpeta del proyecto (campo *Carpeta local*, p. ej. `Documentos/informe.md`) o, si no tiene, en tu carpeta de trabajo. Usa **variables** y **bloques de datos** en vez de copiar cifras: así el documento sigue vivo.
+2. **Redacta en Markdown de Claqueta** en la carpeta del proyecto (campo *Carpeta local*, p. ej. `Documentos/informe.md`) o, si no tiene, en tu carpeta de trabajo. Usa **variables** y **bloques de datos** en vez de copiar cifras: así el documento sigue vivo.
 3. **Revisa**: `collado-doc lint informe.md --program N` (variables sin resolver, bloques fallidos, marcas `[Indicar…]`, saltos de nivel de título).
-4. **Renderiza**: `collado-doc render informe.md --format pdf --brand "Collado" --program N --cover -o informe.pdf` (también `docx`, `html`, `md`).
+4. **Renderiza**: `collado-doc render informe.md --format pdf --brand "Claqueta" --program N --cover -o informe.pdf` (también `docx`, `html`, `md`).
 5. **Mira el resultado de verdad**: `collado-doc preview informe.md --program N --pages 1-4` genera `informe-preview-1.png…`; ábrelos con la herramienta de lectura de imágenes y corrige (tablas cortadas, páginas casi vacías, portada, títulos huérfanos, desbordes, orden). Repite hasta que esté limpio.
 6. **Guarda y entrega**: `collado-doc save informe.md --program N --type report` (documento editable en la app, con historial) y/o el fichero exportado. Dile a la persona dónde está (`#/doc/ID`).
 
 Atajos: `collado-doc new --template dossier --program N --var ask="…"` crea el documento editable ya relleno con datos reales; `collado-doc render --template callsheet --program N --episode N --var date=2026-02-01 --var location="Plató 1" --format pdf` renderiza sin guardar.
 
-## Collado Markdown (resumen)
+## Claqueta Markdown (resumen)
 Markdown habitual (títulos `#`–`####`, negrita, cursiva, listas anidadas y de tareas, citas, código, tablas con alineación `:--|--:`, imágenes `![texto](att:ID "pie")` o `logo`) más:
 ```
 ---                                  (cabecera opcional)

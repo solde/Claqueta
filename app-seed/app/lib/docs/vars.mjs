@@ -7,6 +7,7 @@ const truthy = (v) => (Array.isArray(v) ? v.length > 0 : !!v && v !== "0");
 function splitTop(s, sep) { const out = []; let cur = "", q = null; for (const ch of s) { if (q) { cur += ch; if (ch === q) q = null; } else if (ch === '"' || ch === "'") { q = ch; cur += ch; } else if (ch === sep) { out.push(cur); cur = ""; } else cur += ch; } out.push(cur); return out; }
 const unq = (s) => { s = String(s ?? "").trim(); return /^(["']).*\1$/.test(s) ? s.slice(1, -1) : s; };
 
+/** Applies the filters of a `{{value | filter:arg}}` expression (money, num, pct, date, duration, upper, lower, title, default, join, label, nl2br, md); `md` marks the result as intentional Markdown. */
 export function applyFilters(val, filters, env) {
   let v = val, md = false;
   for (const f of filters) {

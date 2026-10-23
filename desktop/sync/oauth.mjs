@@ -4,6 +4,7 @@ import http from "node:http";
 import crypto from "node:crypto";
 
 const b64u = (b) => Buffer.from(b).toString("base64url");
+/** An OAuth failure with its code (denied, timeout, not_connected...) and the provider's description. */
 export class OAuthError extends Error { constructor(code, detail) { super(code); this.code = code; this.detail = detail; } }
 
 async function tokenRequest(url, params, fetchImpl) {
@@ -37,13 +38,16 @@ export async function authorize({ authUrl, tokenUrl, clientId, clientSecret, sco
   } finally { clearTimeout(timer); for (const s of servers) s.close(); }
 }
 
+/** Exchanges a refresh token for a new access token. */
 export const refreshToken = ({ tokenUrl, clientId, clientSecret, refresh, scope, fetchImpl = fetch }) =>
   tokenRequest(tokenUrl, { grant_type: "refresh_token", refresh_token: refresh, client_id: clientId, ...(clientSecret ? { client_secret: clientSecret } : {}), ...(scope ? { scope } : {}) }, fetchImpl).then((t) => ({ ...t, refresh: t.refresh || refresh }));
 
 /** Keeps a valid access token for a provider: refreshes shortly before expiry and tells `persist` about every new token set. */
 export class TokenSource {
   constructor({ tokens, tokenUrl, clientId, clientSecret, scope, persist = () => {}, fetchImpl = fetch }) { Object.assign(this, { tokens, tokenUrl, clientId, clientSecret, scope, persist, fetchImpl }); }
+  /** Marks the access token as expired so the next `get` refreshes it. */
   invalidate() { if (this.tokens) this.tokens = { ...this.tokens, expiresAt: 0 }; }
+  /** A valid access token, refreshing it (once even for concurrent callers) when it is about to expire; throws not_connected without a refresh token. */
   async get() {
     if (this.tokens?.access && this.tokens.expiresAt > Date.now()) return this.tokens.access;
     if (!this.tokens?.refresh) throw new OAuthError("not_connected");

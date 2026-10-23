@@ -5,6 +5,7 @@ import * as E from "./engine.mjs";
 import { has } from "./access.mjs";
 import { bad, forbidden, now, log } from "./util.mjs";
 
+/** The kinds of headless agent generation (study, bible, dossier...): label, document type, whether the web may be used, and the task text given to the agent. */
 export const JOB_KINDS = {
   audience: { label: "Estudio de audiencia", doc: "audience", hint: "Mercado, consumo y encaje del programa. Busca datos reales y cita fuentes.", web: true,
     task: "Elabora un ESTUDIO DE AUDIENCIA: tamaño y evolución del consumo del público objetivo (TV lineal, diferido, streaming, radio/podcast según el medio), franjas y hábitos, tendencias del género, referencias comparables (audiencia media y cuota con fecha y fuente), riesgos, oportunidades y recomendación de franja y duración. Separa lo verificado de lo estimado." },
@@ -32,10 +33,11 @@ function contextFor(ctx, programId, episodeId) {
   if (has(ctx, "fin.view")) out.budgets = ok("budgets").map((b) => ({ name: b.name, version: b.version, status: b.status, subtotal: b.subtotal, total: b.total }));
   return out;
 }
+/** Assembles the prompt of a generation: the task, the person's extra instructions and the programme context as JSON (documents are data, not instructions). */
 export function buildPrompt(kind, context, instructions, user) {
   const k = JOB_KINDS[kind] || JOB_KINDS.free;
-  return `Trabajas para ${user || "el equipo"} en la herramienta de producción «Collado». Sigue tus pautas de CLAUDE.md y tus skills de producción de televisión y radio.
-Tu respuesta se guardará tal cual como un documento Markdown (borrador) del programa: devuelve SOLO el documento (título H1, secciones H2, tablas Markdown cuando ayuden, directivas de Collado si las conoces), sin saludo ni comentarios sobre lo que has hecho.
+  return `Trabajas para ${user || "el equipo"} en la herramienta de producción «Claqueta». Sigue tus pautas de CLAUDE.md y tus skills de producción de televisión y radio.
+Tu respuesta se guardará tal cual como un documento Markdown (borrador) del programa: devuelve SOLO el documento (título H1, secciones H2, tablas Markdown cuando ayuden, directivas de Claqueta si las conoces), sin saludo ni comentarios sobre lo que has hecho.
 No inventes datos ni cifras: separa lo verificado (con fuente y fecha) de lo estimado y márcalo. No ejecutes comandos ni modifiques ficheros; ${k.web ? "puedes buscar en la web (sin incluir información confidencial del proyecto en las búsquedas)" : "no necesitas buscar en la web"}.
 
 ENCARGO: ${k.task}
@@ -50,6 +52,7 @@ const MAX_JOBS = Number(process.env.MAX_JOBS || 2);
 /** runner(job) -> Promise<{output, error}>; installed by the server (agentd client) or a test. */
 let runner = null; export const setRunner = (fn) => { runner = fn; };
 
+/** Queues an agent generation for a programme as the person who asked (needs agent.jobs); the result is saved as a draft document. */
 export async function queueJob(ctx, { program_id, episode_id, kind, instructions, title, save }) {
   if (!has(ctx, "agent.jobs")) throw forbidden("needs:agent.jobs");
   if (ctx.external) throw forbidden("forbidden");
@@ -61,12 +64,15 @@ export async function queueJob(ctx, { program_id, episode_id, kind, instructions
   setTimeout(startJobs, 10);
   return { id: job.id, kind: k, status: "queued" };
 }
+/** Cancels a queued or running generation (its author or a user manager). */
 export function cancelJob(ctx, id) {
   const j = q.get("SELECT * FROM jobs WHERE id = ?", Number(id)); if (!j) throw bad("no_job");
   if (j.by !== ctx.user && !has(ctx, "users.manage")) throw forbidden("forbidden");
   running.get(jk(j.id))?.abort?.(); q.run("UPDATE jobs SET status = 'cancelled', finished = ? WHERE id = ? AND status IN ('queued','running')", now(), j.id); return { ok: true };
 }
+/** Starts queued generations in every organization up to MAX_JOBS in parallel. */
 export function startJobs() { for (const slug of listOrgSlugs()) inOrg(slug, startOrgJobs).catch((e) => log("jobs:", e.message)); }
+/** Takes queued jobs of the current organization and runs them through the runner. */
 function startOrgJobs() {
   const slug = currentSlug();
   while (running.size < MAX_JOBS) {
@@ -79,6 +85,7 @@ function startOrgJobs() {
       .then((r) => inOrg(slug, () => finish(job, extra, r.output || "", r.error || "")), (e) => inOrg(slug, () => finish(job, extra, "", String(e.message || e).slice(0, 600))));
   }
 }
+/** Stores the result of a job: draft document, status, notification to the author, and starts the next queued job. */
 async function finish(job, extra, output, error) {
   running.delete(jk(job.id));
   if (q.get("SELECT status FROM jobs WHERE id = ?", job.id)?.status === "cancelled") { startJobs(); return; }
@@ -92,5 +99,6 @@ async function finish(job, extra, output, error) {
   if (!error && job.by) E.notify(job.by, `${(JOB_KINDS[job.kind] || JOB_KINDS.free).label}: listo`, "", docId ? `#/e/documents/${docId}` : `#/e/jobs/${job.id}`, `job-${job.id}`, "job");
   startJobs();
 }
+/** Marks generations that were running when the app stopped as failed (called at start-up). */
 export function recoverJobs() { for (const slug of listOrgSlugs()) inOrg(slug, recoverOrgJobs).catch(() => {}); }
 function recoverOrgJobs() { q.run("UPDATE jobs SET status = 'failed', error = 'Interrumpido por un reinicio de la app', finished = ? WHERE status = 'running'", now()); }

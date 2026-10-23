@@ -1,10 +1,14 @@
 // Shared by the agent tools: where the app and agentd are, and the person's API token (written by agentd on every console attach).
 import fs from "node:fs";
+/** Base URL of the app's API and of agentd's control API, from the environment. */
 export const API = process.env.COLLADO_API || "http://127.0.0.1:3000";
+/** Base URL of agentd's control API (COLLADO_CTL). */
 export const CTL = process.env.COLLADO_CTL || "http://127.0.0.1:8081";
+/** The person's API token (from the file agentd writes, or COLLADO_TOKEN). */
 export function token() {
   try { return fs.readFileSync(process.env.COLLADO_TOKEN_FILE || `${process.env.HOME}/.collado/token`, "utf8").trim(); } catch { return process.env.COLLADO_TOKEN || ""; }
 }
+/** Calls an API with the person's token: JSON in and out, errors turned into readable messages and exit code 1. */
 export async function call(base, method, path, body, { raw = false } = {}) {
   const headers = { "x-requested-with": "collado" }; const t = token(); if (t) headers.authorization = `Bearer ${t}`;
   let payload; if (body !== undefined && !(body instanceof Uint8Array)) { headers["content-type"] = "application/json"; payload = JSON.stringify(body); } else payload = body;
@@ -14,10 +18,15 @@ export async function call(base, method, path, body, { raw = false } = {}) {
   if (!res.ok) fail(`${res.status} ${data?.error || text.slice(0, 300)}${data?.detail ? " " + JSON.stringify(data.detail).slice(0, 400) : ""}${res.status === 401 ? " (el token caduca a las 24 h: reabre la consola)" : ""}`);
   return data;
 }
+/** Readable text of an API error response. */
 async function errText(res) { const t = await res.text(); try { const j = JSON.parse(t); return `${res.status} ${j.error}${j.detail ? " " + JSON.stringify(j.detail).slice(0, 400) : ""}`; } catch { return `${res.status} ${t.slice(0, 300)}`; } }
+/** Prints a message to stderr and exits. */
 export function fail(msg, code = 1) { console.error(msg); process.exit(code); }
+/** Calls the app's API. */
 export const app = (m, p, b, o) => call(API, m, p, b, o);
+/** Calls agentd's control API. */
 export const ctl = (m, p, b, o) => call(CTL, m, p, b, o);
+/** Splits argv into positionals and flags (`--flag value`, `--flag=value`, repeated flags collected in `multi`, `-o file`). */
 export function parseArgs(argv, valueFlags = []) {
   const pos = [], flags = {}, multi = {};
   for (let i = 0; i < argv.length; i++) { const a = argv[i];

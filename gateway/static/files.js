@@ -1,8 +1,8 @@
-// Collado file manager ("Archivos"): a Finder-like explorer over the person's own home folder. All the work happens server side AS their system user
+// Claqueta file manager ("Archivos"): a Finder-like explorer over the person's own home folder. All the work happens server side AS their system user
 // (agentd -> fsops.mjs); this is only the UI. Uses helpers from shell.js ($, el, api, modal, buttons, toast, fmtDate). Loaded before shell.js.
 "use strict";
 const FM = (() => {
-  const ICONS = { dir: "📁", trash: "🗑️", img: "🖼️", pdf: "📕", doc: "📝", sheet: "📊", deck: "📽️", audio: "🎵", video: "🎬", zip: "🗜️", code: "🧾", text: "📄", file: "📄", link: "🔗" };
+  const ICONS = { dir: "folder", trash: "trash", img: "image", pdf: "pdf", doc: "doc", sheet: "sheet", deck: "deck", audio: "audio", video: "video", zip: "zip", code: "code", text: "text", file: "file", link: "link" };   // names in icons.js
   const EXT = { png: "img", jpg: "img", jpeg: "img", gif: "img", webp: "img", svg: "img", pdf: "pdf", doc: "doc", docx: "doc", odt: "doc", rtf: "doc", xls: "sheet", xlsx: "sheet", ods: "sheet", csv: "sheet", tsv: "sheet",
     ppt: "deck", pptx: "deck", odp: "deck", mp3: "audio", wav: "audio", ogg: "audio", m4a: "audio", flac: "audio", mp4: "video", mov: "video", webm: "video", mkv: "video", zip: "zip", gz: "zip", tgz: "zip", tar: "zip",
     js: "code", mjs: "code", ts: "code", py: "code", sh: "code", json: "code", css: "code", html: "code", yml: "code", yaml: "code", xml: "code", sql: "code", md: "text", txt: "text", log: "text", ics: "text" };
@@ -41,19 +41,19 @@ const FM = (() => {
 
     // ---- skeleton -------------------------------------------------------------------------------------------------------------------------
     const side = el("nav", { class: "fm-side", "aria-label": "Ubicaciones" });
-    const bBack = el("button", { class: "btn sm", type: "button", title: "Atrás (Alt+←)", "aria-label": "Atrás", onclick: () => go(-1) }, "‹");
-    const bFwd = el("button", { class: "btn sm", type: "button", title: "Adelante (Alt+→)", "aria-label": "Adelante", onclick: () => go(1) }, "›");
-    const bUp = el("button", { class: "btn sm", type: "button", title: "Carpeta superior (Alt+↑)", "aria-label": "Carpeta superior", onclick: () => up() }, "↑");
+    const bBack = el("button", { class: "btn sm", type: "button", title: "Atrás (Alt+←)", "aria-label": "Atrás", onclick: () => go(-1) }, ico("back"));
+    const bFwd = el("button", { class: "btn sm", type: "button", title: "Adelante (Alt+→)", "aria-label": "Adelante", onclick: () => go(1) }, ico("next"));
+    const bUp = el("button", { class: "btn sm", type: "button", title: "Carpeta superior (Alt+↑)", "aria-label": "Carpeta superior", onclick: () => up() }, ico("up"));
     const crumbs = el("div", { class: "fm-crumbs", role: "navigation", "aria-label": "Ruta" });
-    const bIcon = el("button", { class: "btn sm", type: "button", "aria-label": "Vista de iconos", title: "Iconos", onclick: () => setView("icon") }, "▦");
-    const bList = el("button", { class: "btn sm", type: "button", "aria-label": "Vista de lista", title: "Lista", onclick: () => setView("list") }, "☰");
+    const bIcon = el("button", { class: "btn sm", type: "button", "aria-label": "Vista de iconos", title: "Iconos", onclick: () => setView("icon") }, ico("dash"));
+    const bList = el("button", { class: "btn sm", type: "button", "aria-label": "Vista de lista", title: "Lista", onclick: () => setView("list") }, ico("menu"));
     const sortSel = el("select", { "aria-label": "Ordenar por", onchange: () => { S.sort = sortSel.value; persist(); render(); } },
       [["name", "Nombre"], ["mtime", "Fecha"], ["size", "Tamaño"], ["kind", "Tipo"]].map(([v, l]) => el("option", { value: v }, l)));
     const search = el("input", { type: "search", class: "fm-search", placeholder: "Filtrar · Intro busca dentro", "aria-label": "Filtrar o buscar archivos", autocomplete: "off" });
-    const bNew = el("button", { class: "btn sm", type: "button", title: "Nueva carpeta (Ctrl+Mayús+N)", onclick: () => newItem("dir") }, "＋ Carpeta");
-    const bUpload = el("button", { class: "btn sm", type: "button", title: W("Subir archivos", "Importar archivos"), onclick: () => pick(false) }, W("⇧ Subir", "⇧ Importar"));
-    const bDown = el("button", { class: "btn sm primary", type: "button", title: W("Descargar la selección (carpetas en .zip)", "Exportar la selección (carpetas en .zip)"), onclick: () => download([...S.sel].map((n) => full(n))) }, W("⇩ Descargar", "⇩ Exportar"));
-    const bTrash = el("button", { class: "btn sm", type: "button", title: "Mover a la papelera (Supr)", onclick: () => remove() }, "🗑 Papelera");
+    const bNew = el("button", { class: "btn sm", type: "button", title: "Nueva carpeta (Ctrl+Mayús+N)", onclick: () => newItem("dir") }, ico("plus"), " Carpeta");
+    const bUpload = el("button", { class: "btn sm", type: "button", title: W("Subir archivos", "Importar archivos"), onclick: () => pick(false) }, ico("upload"), " ", W("Subir", "Importar"));
+    const bDown = el("button", { class: "btn sm primary", type: "button", title: W("Descargar la selección (carpetas en .zip)", "Exportar la selección (carpetas en .zip)"), onclick: () => download([...S.sel].map((n) => full(n))) }, ico("download"), " ", W("Descargar", "Exportar"));
+    const bTrash = el("button", { class: "btn sm", type: "button", title: "Mover a la papelera (Supr)", onclick: () => remove() }, ico("trash"), " Papelera");
     const bHidden = el("button", { class: "btn sm", type: "button", "aria-pressed": "false", title: "Mostrar archivos ocultos (Ctrl+Mayús+.)", onclick: () => { S.hidden = !S.hidden; persist(); render(); } }, ".·");
     const tool = el("div", { class: "fm-tool", role: "toolbar", "aria-label": "Herramientas" }, el("div", { class: "fm-nav" }, bBack, bFwd, bUp), crumbs,
       el("div", { class: "fm-views", role: "group" }, bIcon, bList), sortSel, bHidden, search);
@@ -101,11 +101,11 @@ const FM = (() => {
 
     // ---- rendering -------------------------------------------------------------------------------------------------------------------------
     function renderSide() {
-      const item = (label, icon, path, extra = {}) => el("button", { type: "button", class: "fm-loc", "aria-current": S.cwd === path && !S.found ? "true" : "false", "data-path": path, onclick: () => load(path), ...extra }, el("span", { class: "i", "aria-hidden": "true" }, icon), el("span", {}, label));
-      const projects = (S.projects || []).map((p) => { const lp = `Proyectos/${projectLinkName(p)}`; return item(p.name, "🎬", lp, { onclick: () => openProjectFolder(p), title: p.folder, "aria-current": S.cwd === lp || S.cwd.startsWith(lp + "/") ? "true" : "false" }); });
-      side.replaceChildren(el("h3", {}, "Favoritos"), item("Inicio", "🏠", ""), item("Papelera", ICONS.trash, TRASH),
+      const item = (label, icon, path, extra = {}) => el("button", { type: "button", class: "fm-loc", "aria-current": S.cwd === path && !S.found ? "true" : "false", "data-path": path, onclick: () => load(path), ...extra }, el("span", { class: "i", "aria-hidden": "true" }, ico(icon)), el("span", {}, label));
+      const projects = (S.projects || []).map((p) => { const lp = `Proyectos/${projectLinkName(p)}`; return item(p.name, "reel", lp, { onclick: () => openProjectFolder(p), title: p.folder, "aria-current": S.cwd === lp || S.cwd.startsWith(lp + "/") ? "true" : "false" }); });
+      side.replaceChildren(el("h3", {}, "Favoritos"), item("Inicio", "home", ""), item("Papelera", "trash", TRASH),
         ...(projects.length ? [el("h3", {}, "Proyectos"), ...projects] : []),
-        ...(S.dirs.length ? [el("h3", {}, "Carpetas")] : []), ...S.dirs.filter((d) => !(projects.length && d.name === "Proyectos")).map((d) => item(d.name, "📁", d.name)));
+        ...(S.dirs.length ? [el("h3", {}, "Carpetas")] : []), ...S.dirs.filter((d) => !(projects.length && d.name === "Proyectos")).map((d) => item(d.name, "folder", d.name)));
     }
     function renderCrumbs() {
       const parts = S.cwd ? S.cwd.split("/") : [];
@@ -129,18 +129,18 @@ const FM = (() => {
       bBack.disabled = !S.back.length; bFwd.disabled = !S.fwd.length; bUp.disabled = !S.cwd; renderCrumbs(); renderSide();
       const l = visible();
       content.className = `fm-content ${S.view}`;
-      if (!l.length) content.replaceChildren(el("div", { class: "fm-empty" }, el("div", { class: "big", "aria-hidden": "true" }, S.found ? "🔍" : inTrash() ? ICONS.trash : "📂"),
+      if (!l.length) content.replaceChildren(el("div", { class: "fm-empty" }, el("div", { class: "big", "aria-hidden": "true" }, ico(S.found ? "search" : inTrash() ? "trash" : "folder-open")),
         el("p", {}, S.found ? "Sin resultados" : S.filter ? "Nada coincide con el filtro" : inTrash() ? "La papelera está vacía" : "Carpeta vacía"), S.found || S.filter || inTrash() ? false : el("p", { class: "hint" }, W("Arrastra archivos aquí o usa «Subir».", "Arrastra archivos aquí o usa «Importar»."))));
       else {
         const rows = l.map((e) => {
           const r = el("div", { class: "fm-item" + (S.sel.has(e.name) ? " sel" : "") + (S.clip?.cut && S.clip.paths.includes(full(e.name)) ? " cut" : ""), role: "option", "aria-selected": String(S.sel.has(e.name)), "data-name": e.name, "data-type": e.type,
             draggable: "true", title: S.found ? e.name : "" },
-          el("span", { class: "ic", "aria-hidden": "true" }, iconOf(e)), nameCell(e),
+          el("span", { class: "ic", "aria-hidden": "true" }, ico(iconOf(e))), nameCell(e),
           S.view === "list" ? [el("span", { class: "c-date" }, dt(e.mtime)), el("span", { class: "c-size" }, e.type === "dir" ? "—" : fmtSize(e.size)), el("span", { class: "c-kind" }, S.found ? parent(e.name) || "Inicio" : KINDS[kindOf(e)])] : false);
           return r;
         });
         if (S.view === "list") rows.unshift(el("div", { class: "fm-head", role: "presentation" }, ...[["name", "Nombre"], ["mtime", "Fecha de modificación"], ["size", "Tamaño"], ["kind", S.found ? "Carpeta" : "Tipo"]].map(([k, lab]) =>
-          el("button", { type: "button", class: "h-" + k, onclick: () => { if (S.sort === k) S.asc = !S.asc; else { S.sort = k; S.asc = true; } persist(); render(); } }, lab, S.sort === k ? (S.asc ? " ▲" : " ▼") : ""))));
+          el("button", { type: "button", class: "h-" + k, onclick: () => { if (S.sort === k) S.asc = !S.asc; else { S.sort = k; S.asc = true; } persist(); render(); } }, lab, S.sort === k ? ico(S.asc ? "up" : "down", "sort") : ""))));
         content.replaceChildren(...rows);
       }
       updateBar();
@@ -148,7 +148,7 @@ const FM = (() => {
     /** Selection-dependent chrome; selection changes never rebuild the rows (a rebuilt row would swallow the second click of a double click). */
     function updateBar() {
       const l = visible(), n = S.sel.size;
-      bDown.disabled = !n; bTrash.textContent = inTrash() ? "🗑 Vaciar" : "🗑 Papelera"; bTrash.title = inTrash() ? "Vaciar la papelera" : "Mover a la papelera (Supr)";
+      bDown.disabled = !n; bTrash.replaceChildren(ico("trash"), inTrash() ? " Vaciar" : " Papelera"); bTrash.title = inTrash() ? "Vaciar la papelera" : "Mover a la papelera (Supr)";
       bNew.hidden = inTrash(); bUpload.hidden = inTrash(); bTrash.disabled = inTrash() ? !S.entries.some((e) => !e.name.startsWith(".")) : !n;
       const tot = l.reduce((a, e) => a + (e.type === "file" ? e.size : 0), 0);
       status.textContent = n ? `${n} seleccionado${n > 1 ? "s" : ""} de ${l.length}` : S.found ? `${l.length} resultado${l.length === 1 ? "" : "s"}` : `${l.length} elemento${l.length === 1 ? "" : "s"}${tot ? ` · ${fmtSize(tot)}` : ""}`;
@@ -258,7 +258,7 @@ const FM = (() => {
       try { d = await call("files/stat?" + q({ path: target })); } catch (e) { return toast(e.message); }
       const rows = [["Nombre", d.name || "Inicio"], ["Tipo", d.type === "dir" ? "Carpeta" : KINDS[kindOf(d)]], ["Tamaño", fmtSize(d.deep ?? d.size) + (d.type === "dir" ? " (con el contenido)" : "")], ["Ubicación", "~/" + parent(d.path || target)],
         ["Modificado", dt(d.mtime)], ["Permisos", d.mode], d.link ? ["Alias", "Sí"] : null].filter(Boolean);
-      modal("Información", el("div", {}, el("div", { class: "fm-infohead" }, el("span", { class: "big", "aria-hidden": "true" }, iconOf(d)), el("strong", {}, d.name || "Inicio")), el("dl", { class: "kv" }, rows.flatMap(([k, v]) => [el("dt", {}, k), el("dd", {}, v)])),
+      modal("Información", el("div", {}, el("div", { class: "fm-infohead" }, el("span", { class: "big", "aria-hidden": "true" }, ico(iconOf(d))), el("strong", {}, d.name || "Inicio")), el("dl", { class: "kv" }, rows.flatMap(([k, v]) => [el("dt", {}, k), el("dd", {}, v)])),
         buttons(el("button", { class: "btn primary", type: "button", onclick: () => modal.close(null) }, "Cerrar"))));
     }
     async function doSearch(text) {
@@ -279,8 +279,8 @@ const FM = (() => {
       else if (["mp3", "wav", "ogg", "m4a"].includes(ext)) body = el("audio", { src: url, controls: true, class: "ql-media" });
       else if (["mp4", "webm", "mov"].includes(ext)) body = el("video", { src: url, controls: true, class: "ql-vid" });
       else if (PREVIEW_TEXT.has(ext) && e.size <= 1048576) { body = el("pre", { class: "ql-text" }, "Cargando…"); fetch(url).then((r) => r.text()).then((t) => { body.textContent = t.slice(0, 300000); }).catch(() => { body.textContent = "No se pudo leer el archivo."; }); }
-      else body = el("div", { class: "fm-empty" }, el("div", { class: "big", "aria-hidden": "true" }, iconOf(e)), el("p", {}, PREVIEW_TEXT.has(ext) ? "Archivo demasiado grande para la vista previa." : "No hay vista previa para este tipo de archivo."));
-      const dl = el("button", { class: "btn primary", type: "button", onclick: () => download([full(e.name)]) }, W("⇩ Descargar", "⇩ Exportar"));
+      else body = el("div", { class: "fm-empty" }, el("div", { class: "big", "aria-hidden": "true" }, ico(iconOf(e))), el("p", {}, PREVIEW_TEXT.has(ext) ? "Archivo demasiado grande para la vista previa." : "No hay vista previa para este tipo de archivo."));
+      const dl = el("button", { class: "btn primary", type: "button", onclick: () => download([full(e.name)]) }, ico("download"), " ", W("Descargar", "Exportar"));
       const done = modal(nm, el("div", { class: "ql" }, el("div", { class: "ql-body" }, body), buttons(el("span", { class: "grow ql-meta" }, `${fmtSize(e.size)} · ${dt(e.mtime)}`), dl, el("button", { class: "btn", type: "button", onclick: () => modal.close(null) }, "Cerrar"))));
       $("#modal .dialog")?.classList.add("wide");
       done.then(() => { $("#modal .dialog")?.classList.remove("wide"); body.pause?.(); if (body.tagName === "IFRAME") body.src = "about:blank"; });
@@ -299,7 +299,7 @@ const FM = (() => {
         if (S.clip && one && s[0].type === "dir") add("Pegar dentro", () => paste(full(s[0].name)));
         sep(); add("Información", info, { key: "Ctrl+I" }); add("Mover a la papelera", remove, { key: "Supr" });
       } else if (inTrash()) { add("Vaciar la papelera…", remove, { disabled: !S.entries.some((e) => !e.name.startsWith(".")) }); }
-      else { add("Nueva carpeta", () => newItem("dir"), { key: "Ctrl+⇧+N" }); add("Nuevo archivo de texto", () => newItem("file")); sep(); add("Pegar", () => paste(), { disabled: !S.clip, key: "Ctrl+V" }); add(W("Subir archivos…", "Importar archivos…"), () => pick(false)); add(W("Subir carpeta…", "Importar carpeta…"), () => pick(true));
+      else { add("Nueva carpeta", () => newItem("dir"), { key: "Ctrl+Mayús+N" }); add("Nuevo archivo de texto", () => newItem("file")); sep(); add("Pegar", () => paste(), { disabled: !S.clip, key: "Ctrl+V" }); add(W("Subir archivos…", "Importar archivos…"), () => pick(false)); add(W("Subir carpeta…", "Importar carpeta…"), () => pick(true));
         sep(); add(S.hidden ? "Ocultar archivos ocultos" : "Mostrar archivos ocultos", () => { S.hidden = !S.hidden; persist(); render(); }); add("Información de esta carpeta", info); }
       menu.replaceChildren(...items); menu.hidden = false;
       const r = pane.getBoundingClientRect(), w = menu.offsetWidth, h = menu.offsetHeight;
