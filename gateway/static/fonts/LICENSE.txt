@@ -1,0 +1,2 @@
+Space Grotesk (c) The Space Grotesk Project Authors; Space Mono (c) Colophon Foundation. Both licensed under the SIL Open Font License 1.1 (https://openfontlicense.org).
+Files from the @fontsource packages.

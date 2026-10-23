@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Collado</title>
+<link rel="icon" href="/_gw/static/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/_gw/static/nb.css">
+<link rel="stylesheet" href="/_gw/static/theme.css">
+<link rel="stylesheet" href="/_gw/static/vendor/xterm.css">
+<link rel="stylesheet" href="/_gw/static/shell.css">
+</head>
+<body>
+<header class="top">
+  <button id="navbtn" class="btn sm" type="button" aria-label="Menú de la aplicación" hidden><svg class="svg-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  <a class="brand" href="#/app" aria-label="Collado"><span class="rec" aria-hidden="true"></span><span class="brandtxt">Collado</span></a>
+  <nav id="tabs" aria-label="Secciones" hidden>
+    <a href="#/app" data-view="app" data-perm="app.view">Proyectos</a>
+    <a href="#/files" data-view="files" data-perm="agent.console|agent.shell">Archivos</a>
+    <a href="#/service" data-view="service" data-perm="service.manage">Servicio</a>
+    <a href="#/admin" data-view="admin" data-perm="users.manage">Usuarios</a>
+    <a href="#/orgs" data-view="orgs" data-perm="platform.admin">Organizaciones</a>
+  </nav>
+  <div id="gsearch-wrap" hidden><input id="gsearch" type="search" placeholder="Buscar en todo…" aria-label="Buscar en todo" autocomplete="off"><div id="gresults" class="pop" hidden></div></div>
+  <span class="grow"></span>
+  <button id="ask" class="btn sm" type="button" title="Preguntar al agente (se escribe en tu consola)" hidden>Preguntar</button>
+  <span id="led" class="led" title="Estado de la app" hidden><i></i><span id="ledtxt"></span></span>
+  <button id="org-btn" class="btn sm" type="button" aria-haspopup="true" aria-expanded="false" title="Cambiar de organización" hidden></button>
+  <div id="orgpop" class="pop" hidden></div>
+  <button id="dock-toggle" class="btn sm" type="button" aria-pressed="false" aria-controls="pane-console" title="Mostrar u ocultar la consola (Ctrl+Alt+C)" hidden>Consola</button>
+  <button id="tour-btn" class="btn sm" type="button" aria-label="Recorrido por la plataforma" title="Recorrido interactivo por la plataforma" hidden>?</button>
+  <button id="bell" class="btn sm" type="button" aria-label="Notificaciones" hidden><svg class="svg-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 21.500a2.200 2.200 0 0 0 4 0"/></svg><span id="bellcnt" class="cnt" hidden></span></button>
+  <button id="menu" class="btn sm" aria-haspopup="true" aria-expanded="false" hidden></button>
+  <div id="menupop" class="pop" hidden></div>
+</header>
+
+<main id="stage">
+  <div id="main">
+    <section id="pane-app" class="pane" hidden><iframe id="appframe" title="Proyectos" src="about:blank"></iframe></section>
+    <section id="pane-files" class="pane" hidden></section>
+    <section id="pane-service" class="pane scroll" hidden></section>
+    <section id="pane-admin" class="pane scroll" hidden></section>
+    <section id="pane-orgs" class="pane scroll" hidden></section>
+  </div>
+  <div id="splitter" role="separator" aria-orientation="vertical" aria-label="Ajustar el ancho de la consola" tabindex="0" hidden></div>
+  <aside id="pane-console" class="pane" aria-label="Consola" hidden>
+    <div class="dockbar">
+      <div class="subtabs" id="subtabs"></div>
+      <button id="dock-max" class="btn sm" type="button" aria-pressed="false" title="Maximizar la consola">Maximizar</button>
+      <button id="dock-close" class="btn sm" type="button" aria-label="Ocultar la consola" title="Ocultar la consola"><svg class="svg-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+    </div>
+    <div class="termwrap" id="termwrap"></div>
+  </aside>
+</main>
+
+<div id="modal" class="modal" hidden><div class="dialog" role="dialog" aria-modal="true" aria-labelledby="mtitle"><h2 id="mtitle"></h2><div id="mbody"></div></div></div>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<script src="/_gw/static/vendor/xterm.js"></script>
+<script src="/_gw/static/vendor/addon-fit.js"></script>
+<script src="/_gw/static/vendor/addon-web-links.js"></script>
+<script src="/_gw/static/vendor/qrcode.js"></script>
+<script src="/_gw/static/icons.js"></script>
+<script src="/_gw/static/files.js"></script>
+<script src="/_gw/static/onboard.js"></script>
+<script src="/_gw/static/tour.js"></script>
+<script src="/_gw/static/shell.js"></script>
+</body>
+</html>

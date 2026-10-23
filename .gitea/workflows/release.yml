@@ -1,0 +1,38 @@
+# Builds the installers on each operating system and attaches them to the release of the tag (Gitea Actions).
+# Needs act_runner runners whose labels match `runner` below (macOS and Windows installers can only be built on those systems),
+# and a repository secret RELEASE_TOKEN (Gitea access token with write access to this repository).
+name: release
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag: { description: "Tag to publish to (e.g. v1.0.1)", required: true }
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: macos-latest, script: "dist:mac", name: "macOS arm64" }
+          - { runner: macos-13, script: "dist:mac", name: "macOS x64" }
+          - { runner: windows-latest, script: "dist:win", name: "Windows x64" }
+          - { runner: ubuntu-latest, script: "dist:linux", name: "Linux x64" }
+    runs-on: ${{ matrix.runner }}
+    name: ${{ matrix.name }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - run: npm ci
+      - name: Unit tests (Linux only: some need a POSIX shell)
+        if: matrix.runner == 'ubuntu-latest'
+        run: npm test
+      - name: Build installers
+        run: npm run ${{ matrix.script }} -- --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"   # unsigned (see docs/DESCARGAS.md)
+      - name: Publish to the release
+        run: node scripts/publish-release.mjs --tag "${{ inputs.tag || gitea.ref_name }}" --dir dist
+        env:
+          GITEA_TOKEN: ${{ secrets.RELEASE_TOKEN }}

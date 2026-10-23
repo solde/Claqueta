@@ -1,0 +1,24 @@
+/* Collado shell and login: legacy class names mapped to the neobrutalism kit (nb.css must be loaded first). Fonts and tokens come from nb.css; no CDN. */
+:root {
+  --bg: var(--nb-bg); --panel: var(--nb-surface); --panel-2: var(--nb-hover); --line: var(--nb-ink); --ink: var(--nb-ink); --ink-2: var(--nb-ink-soft);
+  --accent: var(--nb-accent); --accent-ink: var(--nb-on); --ok: var(--nb-green); --warn: var(--nb-orange); --bad: var(--nb-error); --focus: var(--nb-focus);
+  --shadow: var(--nb-shadow); --mono: var(--nb-font-mono); --sans: var(--nb-font-body);
+}
+html, body { margin: 0; height: 100%; }
+body { background: var(--nb-bg); color: var(--nb-ink); font: 500 15px/1.45 var(--nb-font-body); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 8px 18px; border: var(--nb-border); border-radius: 0; background: var(--nb-surface); color: var(--nb-ink); font-weight: 700; cursor: pointer; box-shadow: var(--nb-shadow-sm); transition: transform var(--nb-transition), box-shadow var(--nb-transition); text-decoration: none; }
+.btn:hover { transform: translate(-2px, -2px); box-shadow: 5px 5px 0 0 var(--nb-ink); background: var(--nb-surface); color: var(--nb-ink); }
+.btn:active { transform: translate(3px, 3px); box-shadow: 0 0 0 0 var(--nb-ink); }
+.btn.primary { background: var(--nb-accent); color: var(--nb-on); box-shadow: var(--nb-shadow); } .btn.primary:hover { background: var(--nb-accent); color: var(--nb-on); box-shadow: var(--nb-shadow-hover); }
+.btn.danger { background: var(--nb-error); color: #FFFFFF; }
+.btn[disabled] { background: var(--nb-disabled); color: var(--nb-ink-soft); box-shadow: none; cursor: not-allowed; transform: none; }
+.btn.sm { min-height: 36px; padding: 2px 12px; font-size: 13px; }
+input[type=text], input[type=password], input[type=number], input[type=search], select, textarea { width: 100%; min-height: 44px; padding: 8px 12px; border: var(--nb-border); border-radius: 0; background: var(--nb-surface); color: var(--nb-ink); box-shadow: var(--nb-shadow-sm); font-weight: 500; }
+input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid var(--nb-focus); outline-offset: 2px; background: var(--nb-hover); box-shadow: var(--nb-shadow); }
+label { display: block; font: 700 .8125rem var(--nb-font-mono); text-transform: uppercase; letter-spacing: .04em; color: var(--nb-ink); margin: 14px 0 4px; }
+:focus-visible { outline: 3px solid var(--nb-focus); outline-offset: 3px; }
+.err { min-height: 1.4em; font-weight: 700; color: var(--nb-ink); } .err:not(:empty) { background: var(--nb-error); color: #FFFFFF; border: var(--nb-border); padding: 4px 10px; box-shadow: var(--nb-shadow-sm); }
+.chip { display: inline-block; padding: 1px 10px; border: 2px solid var(--nb-ink); border-radius: 999px; font: 700 .75rem var(--nb-font-mono); text-transform: uppercase; background: var(--nb-surface); color: var(--nb-ink); margin: 0 4px 2px 0; }
+.chip.admin { background: var(--nb-pink); color: var(--nb-on); }
+.mono { font-family: var(--nb-font-mono); }
+[hidden] { display: none !important; }
